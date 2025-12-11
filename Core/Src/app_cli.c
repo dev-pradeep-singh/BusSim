@@ -72,10 +72,10 @@ static void CLI_HandleLine(const char *cmd_in)
   cmd[CLI_BUFFER - 1] = '\0';
   CLI_Trim(cmd);
 
-//  if (cmd[0] == '\0')
-//  {
-//    return;
-//  }
+  if (cmd[0] == '\0')
+  {
+    return;
+  }
 
   if (CLI_CaseCmp(cmd, "HELP") == 0)
   {
@@ -95,32 +95,31 @@ static void CLI_HandleLine(const char *cmd_in)
   if (CLI_CaseCmp(cmd, "CAN ON") == 0)
   {
     Bus_StartCan();
-    CLI_Print("CAN ON\r\n");
+    CLI_Print("CAN ON successful!\r\n");
     return;
   }
 
   if (CLI_CaseCmp(cmd, "CAN OFF") == 0)
   {
     Bus_StopCan();
-    CLI_Print("CAN OFF\r\n");
+    CLI_Print("CAN OFF successful!\r\n");
     return;
   }
 
   if (CLI_CaseCmp(cmd, "LIN ON") == 0)
   {
     Bus_StartLin();
-    CLI_Print("LIN ON\r\n");
+    CLI_Print("LIN ON successful!\r\n");
     return;
   }
 
   if (CLI_CaseCmp(cmd, "LIN OFF") == 0)
   {
     Bus_StopLin();
-    CLI_Print("LIN OFF\r\n");
+    CLI_Print("LIN OFF successful!\r\n");
     return;
   }
 
-  CLI_Print("?\r\n");
 }
 
 static void CLI_Trim(char *s)
