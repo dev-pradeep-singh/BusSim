@@ -8,11 +8,13 @@ typedef struct
 {
   bool can_active;
   bool lin_active;
+  uint32_t can_period_ms;
   uint32_t can_tx_count;
   uint32_t lin_tx_count;
   uint32_t can_next_tick;
   uint32_t lin_next_tick;
   CAN_TxHeaderTypeDef can_header;
+  uint8_t can_data[8];
 } bus_state_t;
 
 static bus_state_t state;
@@ -36,15 +38,17 @@ void Bus_Init(CAN_HandleTypeDef *hcan_if, UART_HandleTypeDef *hlin_if)
   state.can_header.IDE = CAN_ID_STD;
   state.can_header.DLC = 8;
   state.can_header.TransmitGlobalTime = DISABLE;
+  memset(state.can_data, 0, sizeof(state.can_data));
+  state.can_period_ms = 100;
 }
 
 void Bus_Process(void)
 {
   const uint32_t now = HAL_GetTick();
 
-  if (state.can_active && (int32_t)(now - state.can_next_tick) >= 0)
+  if (state.can_active && state.can_period_ms > 0 && (int32_t)(now - state.can_next_tick) >= 0)
   {
-    state.can_next_tick = now + 100U;
+    state.can_next_tick = now + state.can_period_ms;
     Bus_SendCan();
   }
 
@@ -55,8 +59,29 @@ void Bus_Process(void)
   }
 }
 
-void Bus_StartCan(void)
+void Bus_SetCanMessage(uint32_t std_id, uint8_t dlc, const uint8_t *data)
 {
+  if (std_id <= 0x7FFU)
+  {
+    state.can_header.StdId = std_id;
+    state.can_header.IDE = CAN_ID_STD;
+  }
+
+  state.can_header.DLC = (dlc <= 8U) ? dlc : 8U;
+  memcpy(state.can_data, data, state.can_header.DLC);
+}
+
+void Bus_SendCanOnce(void)
+{
+  Bus_SendCan();
+}
+
+void Bus_StartCan(uint32_t period_ms)
+{
+  if (period_ms > 0U)
+  {
+    state.can_period_ms = period_ms;
+  }
   state.can_active = true;
   state.can_next_tick = HAL_GetTick();
 }
@@ -80,8 +105,12 @@ void Bus_StopLin(void)
 void Bus_FormatStatus(char *out, size_t len)
 {
   snprintf(out, len,
-           "CAN: %s tx=%lu\r\nLIN: %s tx=%lu\r\n",
-           state.can_active ? "ON" : "OFF", (unsigned long)state.can_tx_count,
+           "CAN: %s tx=%lu id=0x%03lX dlc=%u period=%lums\r\nLIN: %s tx=%lu\r\n",
+           state.can_active ? "ON" : "OFF",
+           (unsigned long)state.can_tx_count,
+           (unsigned long)state.can_header.StdId,
+           (unsigned int)state.can_header.DLC,
+           (unsigned long)state.can_period_ms,
            state.lin_active ? "ON" : "OFF", (unsigned long)state.lin_tx_count);
 }
 
@@ -111,14 +140,23 @@ static void Bus_ConfigCan(void)
 
 static void Bus_SendCan(void)
 {
-  uint8_t data[8] = {0};
   uint32_t mailbox = 0;
-  memcpy(data, &state.can_tx_count, sizeof(state.can_tx_count));
-  memcpy(&data[4], &state.lin_tx_count, sizeof(state.lin_tx_count));
 
-  if (HAL_CAN_AddTxMessage(can_if, &state.can_header, data, &mailbox) == HAL_OK)
+  if (HAL_CAN_AddTxMessage(can_if, &state.can_header, state.can_data, &mailbox) == HAL_OK)
   {
     state.can_tx_count++;
+    return;
+  }
+
+  /* If mailboxes stuck or CAN off, try to recover and retry once */
+  uint32_t err = HAL_CAN_GetError(can_if);
+  if (err != HAL_CAN_ERROR_NONE)
+  {
+    (void)HAL_CAN_AbortTxRequest(can_if,
+                                 CAN_TX_MAILBOX0 | CAN_TX_MAILBOX1 | CAN_TX_MAILBOX2);
+    (void)HAL_CAN_Stop(can_if);
+    (void)HAL_CAN_Start(can_if);
+    (void)HAL_CAN_AddTxMessage(can_if, &state.can_header, state.can_data, &mailbox);
   }
 }
 

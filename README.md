@@ -19,10 +19,12 @@ Single CAN + LIN rest-bus simulator for the STM32F103C8T6 (Blue Pill class). It 
 
 ## Command set (UART CLI)
 ```
-HELP           Show commands
-STATUS         Show bus states and counters
-CAN ON|OFF     Start/stop dummy CAN traffic
-LIN ON|OFF     Start/stop dummy LIN traffic
+HELP
+STATUS
+CAN TX <id> <dlc> <b0..b7> [PER <ms>|ONCE]  ; send once or start periodic with given payload
+CAN START [period_ms]                      ; start periodic using last configured payload/period
+CAN STOP                                   ; stop periodic CAN
+LIN ON | LIN OFF                           ; start/stop LIN dummy traffic
 ```
 
 ## Notes

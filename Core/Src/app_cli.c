@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define CLI_BUFFER 64
 
@@ -35,6 +36,7 @@ void CLI_Process(void)
   line[line_pos] = '\0';
   CLI_HandleLine(line);
   line_pos = 0;
+  CLI_Print("> ");
 }
 
 void CLI_Print(const char *msg)
@@ -80,7 +82,7 @@ static void CLI_HandleLine(const char *cmd_in)
   if (CLI_CaseCmp(cmd, "HELP") == 0)
   {
     CLI_Print("Commands:\r\n");
-    CLI_Print("HELP\r\nSTATUS\r\nCAN ON\r\nCAN OFF\r\nLIN ON\r\nLIN OFF\r\n");
+    CLI_Print("HELP\r\nSTATUS\r\nCAN TX <id> <dlc> <b0..b7> [PER <ms>|ONCE]\r\nCAN START [period_ms]\r\nCAN STOP\r\nLIN ON\r\nLIN OFF\r\n");
     return;
   }
 
@@ -92,17 +94,97 @@ static void CLI_HandleLine(const char *cmd_in)
     return;
   }
 
-  if (CLI_CaseCmp(cmd, "CAN ON") == 0)
+  if (strncmp(cmd, "CAN TX", 6) == 0)
   {
-    Bus_StartCan();
-    CLI_Print("CAN ON successful!\r\n");
+    char *save = NULL;
+    char *tok = strtok_r(cmd + 6, " ", &save);
+    if (tok == NULL)
+    {
+      CLI_Print("ERR: id\r\n");
+      return;
+    }
+    uint32_t id = strtoul(tok, NULL, 0);
+
+    tok = strtok_r(NULL, " ", &save);
+    if (tok == NULL)
+    {
+      CLI_Print("ERR: dlc\r\n");
+      return;
+    }
+    uint8_t dlc = (uint8_t)strtoul(tok, NULL, 0);
+    if (dlc > 8U)
+    {
+      CLI_Print("ERR: dlc>8\r\n");
+      return;
+    }
+
+    uint8_t data[8] = {0};
+    for (uint8_t i = 0; i < dlc; i++)
+    {
+      tok = strtok_r(NULL, " ", &save);
+      if (tok == NULL)
+      {
+        CLI_Print("ERR: data\r\n");
+        return;
+      }
+      data[i] = (uint8_t)strtoul(tok, NULL, 0);
+    }
+
+    /* Optional: PER <ms> or ONCE (default) */
+    tok = strtok_r(NULL, " ", &save);
+    uint32_t per = 0;
+    bool do_periodic = false;
+    if (tok != NULL)
+    {
+      if (CLI_CaseCmp(tok, "PER") == 0 || CLI_CaseCmp(tok, "PERIOD") == 0)
+      {
+        char *val = strtok_r(NULL, " ", &save);
+        if (val == NULL)
+        {
+          CLI_Print("ERR: period\r\n");
+          return;
+        }
+        per = strtoul(val, NULL, 0);
+        do_periodic = true;
+      }
+      else if (CLI_CaseCmp(tok, "ONCE") == 0)
+      {
+        do_periodic = false;
+      }
+    }
+
+    Bus_SetCanMessage(id, dlc, data);
+    if (do_periodic && per > 0U)
+    {
+      Bus_StartCan(per);
+      CLI_Print("CAN periodic start\r\n");
+    }
+    else
+    {
+      Bus_SendCanOnce();
+      CLI_Print("CAN once\r\n");
+    }
     return;
   }
 
-  if (CLI_CaseCmp(cmd, "CAN OFF") == 0)
+  if (strncmp(cmd, "CAN START", 9) == 0)
+  {
+    char *save = NULL;
+    char *tok = strtok_r(cmd + 9, " ", &save);
+    uint32_t per = 0;
+    if (tok != NULL)
+    {
+      per = strtoul(tok, NULL, 0);
+    }
+    Bus_StartCan(per);
+    CLI_Print("CAN start\r\n");
+    return;
+  }
+
+  if (CLI_CaseCmp(cmd, "CAN STOP") == 0)
   {
     Bus_StopCan();
-    CLI_Print("CAN OFF successful!\r\n");
+    CLI_Print("CAN stop\r\n");
     return;
   }
 
