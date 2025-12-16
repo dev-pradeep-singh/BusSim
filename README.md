@@ -8,6 +8,10 @@ Single CAN + LIN rest-bus simulator for the STM32F103C8T6 (Blue Pill class). It 
 - Dummy LIN frame (break + sync + ID 0x12 + 4-byte counter payload) at 10 Hz when enabled.
 - Simple status report over UART showing on/off state and counters.
 
+## Hardware
+BusSim hardware is wired up as shown below:
+![BusSim hardware wiring](Tools/BusSim.png)
+
 ## Quick start (CubeIDE)
 1) Open `BusSim.ioc` in STM32CubeIDE (6.11+ recommended). Target MCU: `STM32F103C8Tx`, 72 MHz, HSE=8 MHz.
 2) Generate the code (Project > Generate Code). Cube will create the HAL Drivers and startup files under this folder.
