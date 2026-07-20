@@ -1,0 +1,93 @@
+/*
+ * LINSim_DUT_LIN.ldf — demo LDF for LINSim_DUT_LIN.ino, to verify the
+ * Arduino DUT's LIN *master* behavior (frames 0x10 and 0x20) with a LIN
+ * bus analyzer / "bus master" tool.
+ *
+ * Covers only the two IDs the Arduino drives as master:
+ *   0x10  Frame_Counter    — self-contained, Arduino publishes, 1 Hz
+ *   0x20  Frame_QuerySlave — Arduino sends the header, STM32_DUT (in
+ *                            `LIN MODE SLAVE` + `LIN RESP 0x20 ...`)
+ *                            publishes the response, 0.5 Hz
+ *
+ * 0x30 (Frame_AutoRespond) is deliberately NOT in the schedule table here.
+ * In that test the STM32 drives the header instead (`LIN MODE MASTER` +
+ * `LIN SEND 0x30`/`LIN ON`) and the Arduino only auto-answers passively —
+ * i.e. the bus's master role has swapped for that one ID. Its frame is
+ * still declared below so an analyzer can decode it if seen on the bus,
+ * but it's excluded from Arduino_DUT's own schedule table.
+ *
+ * ⚠ If your tool can actively master the bus (not just monitor/decode),
+ * keep it in passive/monitor mode while testing 0x10/0x20 — LIN is
+ * strictly single-master, and having both the Arduino and the tool drive
+ * headers at once is a protocol violation, not just noise (see
+ * CLAUDE.md's LIN architecture notes).
+ *
+ * Response length for 0x20 (3 bytes below) is arbitrary — the wire
+ * protocol carries no length field, so this must simply match whatever
+ * `LIN RESP 0x20 <bytes>` is currently configured on the STM32 (README
+ * example: `LIN RESP 0x20 AA BB CC`). Adjust Frame_QuerySlave's byte
+ * count/signals if you configure a different length.
+ */
+
+LIN_description_file;
+LIN_protocol_version = "2.1";
+LIN_language_version = "2.1";
+LIN_speed = 19.2 kbps;
+
+Nodes {
+    Master: Arduino_DUT, 5 ms, 0.1 ms;
+    Slaves: STM32_DUT;
+}
+
+Signals {
+    CounterByte0    : 8, 0,    Arduino_DUT, STM32_DUT;
+    QueryRespByte0  : 8, 0,    STM32_DUT, Arduino_DUT;
+    QueryRespByte1  : 8, 0,    STM32_DUT, Arduino_DUT;
+    QueryRespByte2  : 8, 0,    STM32_DUT, Arduino_DUT;
+    AutoRespCounter : 8, 0,    Arduino_DUT, STM32_DUT;
+    AutoRespFixed   : 8, 0xA5, Arduino_DUT, STM32_DUT;
+}
+
+Frames {
+    Frame_Counter: 0x10, Arduino_DUT, 1 {
+        CounterByte0, 0;
+    }
+    Frame_QuerySlave: 0x20, STM32_DUT, 3 {
+        QueryRespByte0, 0;
+        QueryRespByte1, 8;
+        QueryRespByte2, 16;
+    }
+    Frame_AutoRespond: 0x30, Arduino_DUT, 2 {
+        AutoRespCounter, 0;
+        AutoRespFixed, 8;
+    }
+}
+
+Node_attributes {
+    STM32_DUT {
+        LIN_protocol = "2.1";
+        configured_NAD = 0x01;
+        initial_NAD = 0x01;
+        product_id = 0x7FFF, 0x7FFF, 0;
+        P2_min = 50 ms;
+        ST_min = 0 ms;
+        configurable_frames {
+            Frame_QuerySlave;
+        }
+    }
+}
+
+/*
+ * Approximates the sketch's actual loop() timing (Frame_Counter every
+ * 1000 ms, Frame_QuerySlave every 2000 ms) via a repeating 2000 ms cycle —
+ * exact phase doesn't matter here since real timing comes from the
+ * Arduino's own millis()-based scheduler in LINSim_DUT_LIN.ino, not from
+ * a tool driving this table. Use this purely for frame/signal decode.
+ */
+Schedule_tables {
+    Master_Schedule {
+        Frame_Counter    delay 500 ms;
+        Frame_QuerySlave delay 500 ms;
+        Frame_Counter    delay 1000 ms;
+    }
+}

@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BusSim Web UI</title>
+<style>
+:root {
+  --bg:       #0f1117;
+  --surf:     #1a1d27;
+  --surf2:    #23273a;
+  --border:   #2d3250;
+  --text:     #e2e4f0;
+  --muted:    #6b7280;
+  --blue:     #7c9cff;
+  --green:    #4ade80;
+  --red:      #f87171;
+  --amber:    #fbbf24;
+  --cyan:     #22d3ee;
+  --sidebar:  200px;
+  --hdr:      50px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; font-size: 13px; overflow: hidden; }
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+#header {
+  height: var(--hdr); display: flex; align-items: center; gap: 12px;
+  padding: 0 14px; background: var(--surf); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#header .brand { font-size: 15px; font-weight: 700; color: var(--cyan); letter-spacing: .5px; margin-right: 8px; }
+#dbc-status { color: var(--muted); font-size: 12px; flex: 1; }
+#dbc-status.loaded { color: var(--green); }
+.btn {
+  padding: 4px 12px; border-radius: 5px; border: 1px solid var(--border);
+  background: var(--surf2); color: var(--text); cursor: pointer; font-size: 12px;
+  transition: background .15s, border-color .15s;
+}
+.btn:hover { background: var(--border); border-color: var(--blue); }
+.btn.primary { background: var(--blue); color: #0f1117; border-color: var(--blue); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.15); }
+.btn.danger { background: var(--red); color: #0f1117; border-color: var(--red); font-weight: 600; }
+.btn.success { background: var(--green); color: #0f1117; border-color: var(--green); font-weight: 600; }
+.btn:disabled { opacity: .35; cursor: not-allowed; filter: none; }
+#conn-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 5px; }
+#conn-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+#conn-label { font-size: 12px; color: var(--muted); margin-right: 6px; }
+#conn-label.connected { color: var(--green); }
+
+/* ── Layout ──────────────────────────────────────────────────────────── */
+#layout {
+  display: flex; height: calc(100vh - var(--hdr)); overflow: hidden;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar); flex-shrink: 0; background: var(--surf);
+  border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  overflow: hidden;
+}
+#sidebar-title {
+  padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .8px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#msg-list { overflow-y: auto; flex: 1; padding: 4px 0; }
+.msg-item { cursor: pointer; }
+.msg-item .msg-hdr {
+  padding: 5px 10px; font-size: 12px; display: flex; align-items: center; gap: 5px;
+  user-select: none; border-left: 2px solid transparent;
+}
+.msg-item .msg-hdr:hover { background: var(--surf2); }
+.msg-item.active .msg-hdr { border-left-color: var(--cyan); color: var(--cyan); }
+.msg-item .msg-id { color: var(--muted); font-family: monospace; font-size: 11px; }
+.msg-item .msg-signals { padding: 2px 0 4px 20px; display: none; }
+.msg-item.open .msg-signals { display: block; }
+.sig-entry { padding: 2px 8px; font-size: 11px; color: var(--muted); font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sig-entry:hover { color: var(--text); }
+.caret { font-size: 10px; color: var(--muted); transition: transform .2s; }
+.msg-item.open .caret { transform: rotate(90deg); }
+
+/* ── Workspace ───────────────────────────────────────────────────────── */
+#workspace { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Tab bar ─────────────────────────────────────────────────────────── */
+#tab-bar {
+  display: flex; align-items: center; gap: 2px; padding: 6px 10px 0;
+  background: var(--surf); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.tab {
+  padding: 5px 16px; border-radius: 5px 5px 0 0; cursor: pointer; font-size: 12px;
+  color: var(--muted); border: 1px solid transparent; border-bottom: none;
+  background: transparent; transition: color .15s, background .15s;
+}
+.tab:hover { color: var(--text); background: var(--surf2); }
+.tab.active { color: var(--text); background: var(--bg); border-color: var(--border); border-bottom: 1px solid var(--bg); margin-bottom: -1px; }
+#tab-bar .spacer { flex: 1; }
+#frame-count { font-size: 11px; color: var(--muted); padding-right: 4px; }
+
+/* ── Panel ───────────────────────────────────────────────────────────── */
+.panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.panel.active { display: flex; }
+.toolbar {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  background: var(--surf); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.toolbar input[type=text] {
+  background: var(--surf2); border: 1px solid var(--border); color: var(--text);
+  padding: 3px 8px; border-radius: 4px; font-size: 12px; width: 130px;
+  font-family: monospace;
+}
+.toolbar input[type=text]:focus { outline: none; border-color: var(--blue); }
+.toolbar label { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.toolbar input[type=checkbox] { accent-color: var(--blue); }
+
+/* ── Traffic table ───────────────────────────────────────────────────── */
+#traffic-wrap { flex: 1; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  position: sticky; top: 0; background: var(--surf); padding: 6px 10px;
+  text-align: left; font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .6px; border-bottom: 1px solid var(--border);
+  z-index: 2;
+}
+tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
+tbody tr:hover { background: var(--surf2); }
+tbody tr.flash { animation: flash .4s; }
+@keyframes flash { 0%,100% { background: transparent; } 30% { background: rgba(124,156,255,.18); } }
+td { padding: 5px 10px; font-size: 12px; vertical-align: top; }
+td.mono { font-family: monospace; }
+td.id-cell { font-family: monospace; font-weight: 700; }
+.id-known { color: var(--cyan); }
+.id-unknown { color: var(--muted); }
+.dir-rx { color: var(--green); font-size: 11px; font-weight: 700; font-family: monospace; }
+.dir-tx { color: var(--amber); font-size: 11px; font-weight: 700; font-family: monospace; }
+td.name-cell { color: var(--text); }
+td.data-cell { font-family: monospace; color: var(--amber); font-size: 11px; }
+td.sig-cell { max-width: 300px; }
+.sig-chip {
+  display: inline-block; margin: 1px 2px; padding: 1px 6px; border-radius: 10px;
+  background: var(--surf2); border: 1px solid var(--border); font-size: 11px;
+  font-family: monospace; color: var(--text); white-space: nowrap;
+}
+.sig-chip .sig-name { color: var(--muted); }
+.sig-chip .sig-val { color: var(--green); margin-left: 3px; }
+tr.expanded td { background: var(--surf2); }
+.sig-detail {
+  display: none; padding: 6px 10px; background: var(--surf2);
+  border-bottom: 1px solid var(--border);
+}
+.sig-detail.show { display: table-row; }
+.sig-detail td { padding: 6px 14px; }
+.sig-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+.sig-box { background: var(--surf); border: 1px solid var(--border); border-radius: 5px; padding: 6px 10px; }
+.sig-box .sn { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.sig-box .sv { font-size: 14px; font-weight: 700; color: var(--cyan); font-family: monospace; }
+.sig-box .su { font-size: 11px; color: var(--muted); margin-left: 4px; }
+.sig-box .sr { font-size: 10px; color: var(--border); font-family: monospace; margin-top: 2px; }
+
+/* ── Console ─────────────────────────────────────────────────────────── */
+#console-out {
+  flex: 1; overflow-y: auto; padding: 8px 12px; font-family: monospace; font-size: 12px;
+  line-height: 1.6; background: var(--bg);
+}
+.con-line { white-space: pre-wrap; word-break: break-all; }
+.con-rx { color: var(--green); }
+.con-tx { color: var(--blue); }
+.con-sys { color: var(--muted); font-style: italic; }
+.con-err { color: var(--red); }
+.cmd-row { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--surf); flex-shrink: 0; }
+.cmd-row input {
+  flex: 1; background: var(--surf2); border: 1px solid var(--border); color: var(--text);
+  padding: 5px 10px; border-radius: 4px; font-size: 13px; font-family: monospace;
+}
+.cmd-row input:focus { outline: none; border-color: var(--blue); }
+
+/* ── Transmit panel ──────────────────────────────────────────────────── */
+#tab-transmit { overflow-y: auto; padding: 14px; gap: 14px; }
+.tx-card {
+  background: var(--surf); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px; flex-shrink: 0;
+}
+.tx-card h3 { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 12px; }
+.field-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.field-row label { font-size: 12px; color: var(--muted); min-width: 36px; }
+.tx-input {
+  background: var(--surf2); border: 1px solid var(--border); color: var(--text);
+  padding: 5px 8px; border-radius: 4px; font-family: monospace; font-size: 13px;
+}
+.tx-input:focus { outline: none; border-color: var(--blue); }
+.tx-input.wide { width: 200px; }
+.tx-input.small { width: 60px; }
+.tx-input.tiny { width: 38px; }
+#data-bytes { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.byte-input {
+  width: 34px; padding: 5px 4px; text-align: center; background: var(--surf2);
+  border: 1px solid var(--border); color: var(--amber); font-family: monospace;
+  font-size: 13px; border-radius: 4px; text-transform: uppercase;
+}
+.byte-input:focus { outline: none; border-color: var(--amber); }
+.can-ctrl { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+#can-state-badge {
+  padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 700;
+  background: var(--surf2); color: var(--muted); border: 1px solid var(--border);
+}
+#can-state-badge.on { background: rgba(74,222,128,.15); color: var(--green); border-color: var(--green); }
+
+/* DBC guided TX */
+.dbc-tx-header { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+#tx-msg-select {
+  background: var(--surf2); border: 1px solid var(--border); color: var(--text);
+  padding: 5px 8px; border-radius: 4px; font-size: 12px;
+}
+#tx-msg-select:focus { outline: none; border-color: var(--blue); }
+#tx-msg-info { font-size: 11px; color: var(--muted); font-family: monospace; }
+#sig-inputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; margin-bottom: 10px; }
+.sig-input-box { background: var(--surf2); border: 1px solid var(--border); border-radius: 5px; padding: 7px 10px; }
+.sig-input-box .si-label { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+.sig-input-box .si-label span { color: var(--muted); font-family: monospace; font-size: 10px; }
+.sig-input-box input {
+  width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 4px 7px; border-radius: 3px; font-family: monospace; font-size: 12px;
+}
+.sig-input-box input:focus { outline: none; border-color: var(--blue); }
+#dbc-tx-preview { font-family: monospace; font-size: 12px; color: var(--amber); padding: 6px 0; }
+#dbc-tx-preview span { color: var(--muted); margin-right: 8px; }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── Misc ────────────────────────────────────────────────────────────── */
+.no-data { padding: 40px; text-align: center; color: var(--muted); font-size: 13px; }
+select option { background: var(--surf2); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <span class="brand">&#x1F68C; BusSim</span>
+  <span id="dbc-status">No DBC loaded</span>
+  <button class="btn" onclick="document.getElementById('dbc-file').click()">Load DBC</button>
+  <input type="file" id="dbc-file" accept=".dbc" style="display:none">
+  <div style="flex:1"></div>
+  <span id="conn-dot"></span>
+  <span id="conn-label">Disconnected</span>
+  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;user-select:none" title="Send LISTEN ON automatically after connecting">
+    <input type="checkbox" id="auto-listen" checked style="accent-color:var(--green)">
+    Auto LISTEN ON
+  </label>
+  <button class="btn primary" id="connect-btn" onclick="toggleConnect()">Connect</button>
+</div>
+
+<!-- Layout -->
+<div id="layout">
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-title">DBC Messages</div>
+    <div id="msg-list"><div class="no-data">Load a .dbc file</div></div>
+  </div>
+
+  <!-- Workspace -->
+  <div id="workspace">
+    <div id="tab-bar">
+      <button class="tab active" data-tab="traffic" onclick="switchTab('traffic')">&#x1F4E1; Traffic</button>
+      <button class="tab" data-tab="console"  onclick="switchTab('console')">&#x1F5A5; Console</button>
+      <button class="tab" data-tab="transmit" onclick="switchTab('transmit')">&#x1F4E4; Transmit</button>
+      <div class="spacer"></div>
+      <span id="frame-count">0 frames</span>
+    </div>
+
+    <!-- Traffic panel -->
+    <div class="panel active" id="tab-traffic">
+      <div class="toolbar">
+        <input type="text" id="id-filter" placeholder="Filter ID (e.g. 0x123)" oninput="applyFilter()">
+        <label><input type="checkbox" id="last-val-mode" checked onchange="applyFilter()"> Last value</label>
+        <button class="btn" onclick="clearTraffic()">Clear</button>
+        <label style="margin-left:8px"><input type="checkbox" id="pause-scroll"> Pause scroll</label>
+      </div>
+      <div id="traffic-wrap">
+        <table id="traffic-table">
+          <thead>
+            <tr>
+              <th style="width:88px">Time</th>
+              <th style="width:28px;text-align:center">Dir</th>
+              <th style="width:44px;text-align:right" title="Frame count">Count</th>
+              <th style="width:58px">ID</th>
+              <th style="width:150px">Name</th>
+              <th style="width:30px">DLC</th>
+              <th style="width:180px">Data</th>
+              <th>Decoded Signals</th>
+            </tr>
+          </thead>
+          <tbody id="traffic-body"></tbody>
+        </table>
+        <div id="no-traffic" class="no-data">Waiting for CAN frames&hellip;</div>
+      </div>
+    </div>
+
+    <!-- Console panel -->
+    <div class="panel" id="tab-console">
+      <div class="toolbar">
+        <button class="btn" onclick="clearConsole()">Clear</button>
+        <label><input type="checkbox" id="console-frames"> Show CAN frames</label>
+        <span style="color:var(--muted);font-size:11px;margin-left:4px">Green = device output &nbsp; Blue = sent commands</span>
+      </div>
+      <div id="console-out"></div>
+      <div class="cmd-row">
+        <input id="console-cmd" placeholder="Type CLI command (e.g. HELP, STATUS, CAN ON)&#x2026;" onkeydown="cmdKeyDown(event)">
+        <button class="btn primary" onclick="sendConsoleCmd()">Send</button>
+      </div>
+    </div>
+
+    <!-- Transmit panel -->
+    <div class="panel" id="tab-transmit">
+
+      <!-- Manual TX -->
+      <div class="tx-card">
+        <h3>&#x270F; Manual Transmit</h3>
+        <div class="field-row">
+          <label>ID</label>
+          <input class="tx-input small" id="tx-id" value="123" placeholder="hex" oninput="syncDlcBytes()">
+          <label style="margin-left:8px">DLC</label>
+          <input class="tx-input tiny" id="tx-dlc" type="number" min="1" max="8" value="8" oninput="syncDlcBytes()">
+          <label style="margin-left:8px">Rate</label>
+          <input class="tx-input tiny" id="tx-rate" type="number" min="1" max="100" value="10">
+          <span style="color:var(--muted);font-size:12px">Hz</span>
+        </div>
+        <div class="field-row">
+          <label>Data</label>
+          <div id="data-bytes"></div>
+        </div>
+        <div class="can-ctrl">
+          <button class="btn primary" onclick="configureTX()">Configure</button>
+          <button class="btn success" id="tx-on-btn"  onclick="canOn()">Tx ON</button>
+          <button class="btn danger"  id="tx-off-btn" onclick="canOff()" disabled>Tx OFF</button>
+          <span id="can-state-badge">OFF</span>
+        </div>
+      </div>
+
+      <!-- DBC-guided TX -->
+      <div class="tx-card" id="dbc-tx-card">
+        <h3>&#x1F4D6; DBC-Guided Transmit</h3>
+        <div id="dbc-tx-empty" style="color:var(--muted);font-size:12px">Load a DBC file to use this feature.</div>
+        <div id="dbc-tx-content" style="display:none">
+          <div class="dbc-tx-header">
+            <label style="color:var(--muted);font-size:12px">Message</label>
+            <select id="tx-msg-select" onchange="onTxMsgChange()"></select>
+            <span id="tx-msg-info"></span>
+          </div>
+          <div id="sig-inputs"></div>
+          <div id="dbc-tx-preview"><span>Data:</span>&mdash;</div>
+          <div class="can-ctrl">
+            <button class="btn primary" onclick="configureFromDBC()">Configure &amp; Apply</button>
+            <button class="btn success" id="dbc-tx-on-btn"  onclick="canOn()">Tx ON</button>
+            <button class="btn danger"  id="dbc-tx-off-btn" onclick="canOff()" disabled>Tx OFF</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /transmit -->
+  </div><!-- /workspace -->
+</div><!-- /layout -->
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════════════════
+// DBC PARSER
+// ══════════════════════════════════════════════════════════════════════
+const dbc = { messages: new Map() }; // id (number) → message object
+
+function parseDBC(text) {
+  dbc.messages.clear();
+  let curMsg = null;
+
+  // Multi-line comment handling: strip block comments
+  text = text.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  const lines = text.split('\n');
+  for (let raw of lines) {
+    const line = raw.trim();
+
+    // Message
+    const mMsg = line.match(/^BO_\s+(\d+)\s+(\w+)\s*:\s*(\d+)\s+(\S+)/);
+    if (mMsg) {
+      curMsg = { id: +mMsg[1], name: mMsg[2], dlc: +mMsg[3], transmitter: mMsg[4], signals: [], comment: '' };
+      dbc.messages.set(curMsg.id, curMsg);
+      continue;
+    }
+
+    // Signal
+    const mSig = line.match(/^\s*SG_\s+(\w+)\s*:\s*(\d+)\|(\d+)@([01])([+-])\s*\(([^,]+),([^)]+)\)\s*\[([^|]+)\|([^\]]+)\]\s*"([^"]*)"\s*(.*)/);
+    if (mSig && curMsg) {
+      curMsg.signals.push({
+        name:      mSig[1],
+        startBit:  +mSig[2],
+        length:    +mSig[3],
+        intel:     mSig[4] === '1',
+        signed:    mSig[5] === '-',
+        factor:    parseFloat(mSig[6]),
+        offset:    parseFloat(mSig[7]),
+        min:       parseFloat(mSig[8]),
+        max:       parseFloat(mSig[9]),
+        unit:      mSig[10],
+        valDesc:   null,
+        comment:   ''
+      });
+      continue;
+    }
+
+    // Message comment
+    const mMC = line.match(/^CM_\s+BO_\s+(\d+)\s+"((?:[^"\\]|\\.)*)"/);
+    if (mMC) { const m = dbc.messages.get(+mMC[1]); if (m) m.comment = mMC[2]; continue; }
+
+    // Signal comment
+    const mSC = line.match(/^CM_\s+SG_\s+(\d+)\s+(\w+)\s+"((?:[^"\\]|\\.)*)"/);
+    if (mSC) {
+      const m = dbc.messages.get(+mSC[1]);
+      if (m) { const s = m.signals.find(x => x.name === mSC[2]); if (s) s.comment = mSC[3]; }
+      continue;
+    }
+
+    // Value descriptions
+    const mVal = line.match(/^VAL_\s+(\d+)\s+(\w+)\s+(.*?)\s*;/);
+    if (mVal) {
+      const m = dbc.messages.get(+mVal[1]);
+      if (m) {
+        const s = m.signals.find(x => x.name === mVal[2]);
+        if (s) {
+          s.valDesc = new Map();
+          for (const [, v, d] of mVal[3].matchAll(/(\d+)\s+"([^"]*)"/g))
+            s.valDesc.set(+v, d);
+        }
+      }
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// SIGNAL DECODE / ENCODE
+// ══════════════════════════════════════════════════════════════════════
+function extractIntel(bytes, startBit, length, signed) {
+  let val = 0n;
+  for (let i = 0; i < length; i++) {
+    const bp = startBit + i, bi = Math.floor(bp / 8), bb = bp % 8;
+    if (bi < bytes.length) val |= BigInt((bytes[bi] >> bb) & 1) << BigInt(i);
+  }
+  if (signed && val >= (1n << BigInt(length - 1))) val -= 1n << BigInt(length);
+  return Number(val);
+}
+
+function extractMotorola(bytes, startBit, length, signed) {
+  // Build a string of all bits (MSB first within each byte)
+  const bits = Array.from(bytes).map(b => b.toString(2).padStart(8,'0')).join('');
+  let val = 0, bp = startBit;
+  for (let i = length - 1; i >= 0; i--) {
+    const bi = Math.floor(bp / 8), bb = bp % 8;
+    const pos = bi * 8 + (7 - bb);
+    val |= (pos < bits.length ? +bits[pos] : 0) << i;
+    if (bb === 0) bp += 15; else bp--;
+  }
+  if (signed && val >= (1 << (length - 1))) val -= (1 << length);
+  return val;
+}
+
+function decodeSignal(bytes, sig) {
+  const raw = sig.intel
+    ? extractIntel(bytes, sig.startBit, sig.length, sig.signed)
+    : extractMotorola(bytes, sig.startBit, sig.length, sig.signed);
+  const phys = raw * sig.factor + sig.offset;
+  const desc = sig.valDesc ? sig.valDesc.get(raw) : null;
+  const dp = sig.factor < 0.1 ? 4 : sig.factor < 1 ? 2 : (Number.isInteger(phys) ? 0 : 2);
+  const physStr = phys.toFixed(dp) + (sig.unit ? ' ' + sig.unit : '');
+  return { raw, phys, desc, str: desc ? `${desc} (${raw})` : physStr };
+}
+
+function encodeIntel(bytes, startBit, length, rawVal) {
+  let v = rawVal < 0 ? rawVal + (1 << length) : rawVal;
+  for (let i = 0; i < length; i++) {
+    const bp = startBit + i, bi = Math.floor(bp / 8), bb = bp % 8;
+    if (bi < bytes.length) {
+      if ((v >> i) & 1) bytes[bi] |=  (1 << bb);
+      else              bytes[bi] &= ~(1 << bb);
+    }
+  }
+}
+
+function encodeSignalIntoBytes(bytes, sig, physVal) {
+  if (!sig.intel) return; // Motorola encode omitted
+  const raw = Math.round((physVal - sig.offset) / sig.factor);
+  const maxRaw = sig.signed ? (1 << (sig.length - 1)) - 1 : (1 << sig.length) - 1;
+  const minRaw = sig.signed ? -(1 << (sig.length - 1)) : 0;
+  encodeIntel(bytes, sig.startBit, sig.length, Math.max(minRaw, Math.min(maxRaw, raw)));
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// FRAME PARSER (BusSim output format)
+// ══════════════════════════════════════════════════════════════════════
+function parseFrame(line) {
+  // TX  ID:0x123  DLC:8  DATA: DE AD BE EF 00 00 00 00
+  // RX  ID:0x7DF  DLC:8  DATA: 02 10 03 AA BB CC DD EE
+  const m = line.match(/(TX|RX)\s+ID:0x([0-9A-Fa-f]+)\s+DLC:(\d+)\s+DATA:\s*((?:[0-9A-Fa-f]{2}\s*)+)/i);
+  if (!m) return null;
+  const data = new Uint8Array(m[4].trim().split(/\s+/).map(h => parseInt(h, 16)));
+  return { dir: m[1].toUpperCase(), id: parseInt(m[2], 16), dlc: +m[3], data };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// WEB SERIAL
+// ══════════════════════════════════════════════════════════════════════
+let port = null, portReader = null, portWriter = null;
+let serialBuf = '';
+let serialConnected = false;
+
+async function toggleConnect() {
+  if (serialConnected) { await doDisconnect(); return; }
+  if (!navigator.serial) {
+    addConsole('Web Serial API not supported. Use Chrome or Edge.', 'err');
+    return;
+  }
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    // Use port.writable.getWriter() directly — no TextEncoderStream pipeline
+    portWriter = port.writable.getWriter();
+    serialConnected = true;
+    setConnUI(true);
+    addConsole('Serial port opened.', 'sys');
+    readLoop(); // runs concurrently; do not await
+    if (document.getElementById('auto-listen').checked) {
+      // Give the device time to send its banner before issuing commands
+      setTimeout(async () => {
+        if (serialConnected) {
+          await serialWrite('LISTEN ON');
+          addConsole('Auto: LISTEN ON sent.', 'sys');
+        }
+      }, 600);
+    }
+  } catch (e) {
+    addConsole('Connect failed: ' + e.message, 'err');
+  }
+}
+
+async function doDisconnect() {
+  serialConnected = false;
+  // Cancel reader first so readLoop's finally block can release the lock
+  try { if (portReader) await portReader.cancel(); } catch {}
+  try { if (portWriter) { await portWriter.close(); portWriter.releaseLock(); } } catch {}
+  portWriter = null;
+  try { if (port) await port.close(); } catch {}
+  port = null;
+  setConnUI(false);
+  addConsole('Disconnected.', 'sys');
+}
+
+async function readLoop() {
+  // Read raw bytes directly from port.readable — avoids the TextDecoderStream
+  // pipeTo() pipeline which silently closes on any internal error, making
+  // portReader.read() return {done:true} with the UI still showing "Connected".
+  const dec = new TextDecoder();
+  portReader = port.readable.getReader();
+  try {
+    while (true) {
+      const { value, done } = await portReader.read();
+      if (done) break;
+      serialBuf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = serialBuf.indexOf('\n')) !== -1) {
+        const line = serialBuf.slice(0, nl).replace(/\r$/, '');
+        serialBuf = serialBuf.slice(nl + 1);
+        // Isolate UI exceptions — a DOM or decode error must NOT kill the read loop.
+        try { onSerialLine(line); }
+        catch (e) { addConsole('[UI error] ' + e.message + ' ← ' + line.slice(0, 60), 'err'); }
+      }
+    }
+  } catch (e) {
+    if (e.name !== 'NetworkError') addConsole('[read error] ' + e.message, 'err');
+  } finally {
+    portReader.releaseLock();
+    portReader = null;
+    if (serialConnected) {          // loop exited without explicit disconnect
+      serialConnected = false;
+      setConnUI(false);
+      addConsole('Connection closed unexpectedly — reconnect to resume.', 'err');
+    }
+  }
+}
+
+async function serialWrite(text) {
+  if (!portWriter) return;
+  try {
+    await portWriter.write(new TextEncoder().encode(text + '\r\n'));
+  } catch (e) { addConsole('[write error] ' + e.message, 'err'); }
+}
+
+function onSerialLine(line) {
+  const stripped = line.replace(/\x1b\[[0-9;]*m/g, '').trim();
+  if (!stripped) return;
+  const frame = parseFrame(stripped);
+  if (frame) {
+    // Decoded frames go to the traffic view only.
+    // Routing them to the console too causes hundreds of DOM inserts per second
+    // (Arduino sends at 10 ms / 100 Hz) which stalls the browser event loop.
+    // The console checkbox "Show frames" overrides this.
+    if (document.getElementById('console-frames').checked) addConsole(stripped, 'rx');
+    addTrafficFrame(frame);
+  } else {
+    addConsole(stripped, 'rx');
+  }
+}
+
+function setConnUI(connected) {
+  document.getElementById('conn-dot').className = connected ? 'connected' : '';
+  const lbl = document.getElementById('conn-label');
+  lbl.textContent = connected ? 'Connected' : 'Disconnected';
+  lbl.className = connected ? 'connected' : '';
+  document.getElementById('connect-btn').textContent = connected ? 'Disconnect' : 'Connect';
+  document.getElementById('connect-btn').className = connected ? 'btn danger' : 'btn primary';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// TRAFFIC TABLE
+// ══════════════════════════════════════════════════════════════════════
+const lastRows = new Map();   // "id_DIR" → <tr> element
+const allFrames = [];
+let totalFrames = 0;
+let expandedRow = null;
+
+function dirBadge(dir) {
+  return dir === 'TX'
+    ? '<span class="dir-tx">TX</span>'
+    : '<span class="dir-rx">RX</span>';
+}
+
+function addTrafficFrame(frame) {
+  const dir = frame.dir || 'RX';
+  const now = new Date();
+  const ts = now.toTimeString().slice(0,8) + '.' + String(now.getMilliseconds()).padStart(3,'0');
+  totalFrames++;
+  document.getElementById('frame-count').textContent = totalFrames + ' frames';
+
+  const lastVal = document.getElementById('last-val-mode').checked;
+  const filter  = document.getElementById('id-filter').value.trim().toLowerCase();
+  const idHex   = frame.id.toString(16).toUpperCase().padStart(3,'0');
+  const filterMatch = !filter || ('0x'+idHex).includes(filter) || idHex.toLowerCase().includes(filter.replace('0x',''));
+
+  const msg = dbc.messages.get(frame.id);
+  const name = msg ? msg.name : '—';
+  const dataHex = Array.from(frame.data).map(b => b.toString(16).toUpperCase().padStart(2,'0')).join(' ');
+
+  const decoded = msg ? msg.signals.map(s => ({ sig: s, val: decodeSignal(frame.data, s) })) : [];
+
+  function makeChips(list) {
+    return list.slice(0, 4).map(d =>
+      `<span class="sig-chip"><span class="sig-name">${d.sig.name}:</span><span class="sig-val">${d.val.str}</span></span>`
+    ).join('') + (list.length > 4 ? `<span class="sig-chip" style="color:var(--muted)">+${list.length-4} more</span>` : '');
+  }
+
+  function makeDetail(list) {
+    if (!list.length) return '<span style="color:var(--muted)">No signals in DBC for this ID.</span>';
+    return '<div class="sig-grid">' + list.map(d =>
+      `<div class="sig-box">
+        <div class="sn">${d.sig.name}</div>
+        <div class="sv">${d.val.str}</div>
+        <div class="sr">raw=0x${d.val.raw.toString(16).toUpperCase()}  bits[${d.sig.startBit}:${d.sig.startBit+d.sig.length-1}]</div>
+       </div>`
+    ).join('') + '</div>';
+  }
+
+  // Last Value mode keys by "id_DIR" so TX and RX for the same ID get separate rows
+  const rowKey = `${frame.id}_${dir}`;
+
+  if (lastVal) {
+    // ── Last Value mode: one row per ID+direction, updated in place ────
+    if (lastRows.has(rowKey)) {
+      const tr = lastRows.get(rowKey);
+      if (!filterMatch) { tr.style.display = 'none'; return; }
+      tr.style.display = '';
+      // cells: [0]=time [1]=dir [2]=count [3]=ID [4]=name [5]=DLC [6]=data [7]=signals
+      const cells = tr.cells;
+      cells[0].textContent = ts;
+      cells[2].textContent = parseInt(cells[2].textContent || '0') + 1;
+      cells[5].textContent = frame.dlc;
+      cells[6].textContent = dataHex;
+      cells[7].innerHTML   = makeChips(decoded);
+      tr.dataset.canData = Array.from(frame.data).map(b => b.toString(16).padStart(2,'0')).join('');
+      const now2 = Date.now();
+      if (!tr._lastFlash || now2 - tr._lastFlash > 400) {
+        tr._lastFlash = now2;
+        tr.classList.remove('flash');
+        requestAnimationFrame(() => tr.classList.add('flash'));
+      }
+      if (expandedRow === tr) {
+        const dtr = tr.nextElementSibling;
+        if (dtr && dtr.classList.contains('sig-detail'))
+          dtr.querySelector('td').innerHTML = makeDetail(decoded);
+      }
+    } else {
+      if (!filterMatch) return;
+      const tr = document.createElement('tr');
+      tr.dataset.canId   = frame.id;
+      tr.dataset.canData = Array.from(frame.data).map(b => b.toString(16).padStart(2,'0')).join('');
+      tr.innerHTML =
+        `<td class="mono">${ts}</td>` +
+        `<td style="text-align:center">${dirBadge(dir)}</td>` +
+        `<td class="mono" style="color:var(--muted);text-align:right">1</td>` +
+        `<td class="id-cell ${msg ? 'id-known' : 'id-unknown'}">0x${idHex}</td>` +
+        `<td class="name-cell">${name}</td>` +
+        `<td>${frame.dlc}</td>` +
+        `<td class="data-cell">${dataHex}</td>` +
+        `<td class="sig-cell">${makeChips(decoded)}</td>`;
+      tr.classList.add('flash');
+      tr.addEventListener('click', () => toggleDetail(tr));
+      lastRows.set(rowKey, tr);
+      const dtr = document.createElement('tr');
+      dtr.className = 'sig-detail';
+      dtr.innerHTML = `<td colspan="8" style="padding:0"></td>`;
+      tbody().appendChild(tr);
+      tbody().appendChild(dtr);
+      document.getElementById('no-traffic').style.display = 'none';
+    }
+  } else {
+    // ── Log mode: append one row per frame ─────────────────────────────
+    if (!filterMatch) return;
+    const tr = document.createElement('tr');
+    tr.dataset.canId   = frame.id;
+    tr.dataset.canData = Array.from(frame.data).map(b => b.toString(16).padStart(2,'0')).join('');
+    tr.innerHTML =
+      `<td class="mono">${ts}</td>` +
+      `<td style="text-align:center">${dirBadge(dir)}</td>` +
+      `<td class="mono" style="color:var(--muted);text-align:right">—</td>` +
+      `<td class="id-cell ${msg ? 'id-known' : 'id-unknown'}">0x${idHex}</td>` +
+      `<td class="name-cell">${name}</td>` +
+      `<td>${frame.dlc}</td>` +
+      `<td class="data-cell">${dataHex}</td>` +
+      `<td class="sig-cell">${makeChips(decoded)}</td>`;
+    tr.addEventListener('click', () => toggleDetail(tr));
+    const dtr = document.createElement('tr');
+    dtr.className = 'sig-detail';
+    dtr.innerHTML = `<td colspan="8" style="padding:0"></td>`;
+    const b = tbody();
+    b.appendChild(tr);
+    b.appendChild(dtr);
+    while (b.children.length > 2000) { b.removeChild(b.firstChild); b.removeChild(b.firstChild); }
+    document.getElementById('no-traffic').style.display = 'none';
+    if (!document.getElementById('pause-scroll').checked)
+      document.getElementById('traffic-wrap').scrollTop = 999999;
+  }
+}
+
+function toggleDetail(tr) {
+  const dtr = tr.nextElementSibling;
+  if (!dtr || !dtr.classList.contains('sig-detail')) return;
+  const isOpen = dtr.classList.contains('show');
+  if (expandedRow && expandedRow !== tr) {
+    const prev = expandedRow.nextElementSibling;
+    if (prev && prev.classList.contains('sig-detail')) prev.classList.remove('show');
+    expandedRow.classList.remove('expanded');
+  }
+  if (isOpen) {
+    dtr.classList.remove('show'); tr.classList.remove('expanded'); expandedRow = null;
+  } else {
+    const msgId  = parseInt(tr.dataset.canId);
+    const hexStr = tr.dataset.canData || '';
+    const bytes  = new Uint8Array(hexStr.match(/.{2}/g)?.map(h => parseInt(h, 16)) || []);
+    const signals = dbc.messages.get(msgId)?.signals || [];
+    const vals = signals.map(s => ({ sig: s, val: decodeSignal(bytes, s) }));
+    dtr.querySelector('td').innerHTML = vals.length
+      ? '<div class="sig-grid" style="padding:8px">' + vals.map(d =>
+          `<div class="sig-box">
+            <div class="sn">${d.sig.name}${d.sig.unit ? '<span style="color:var(--border);margin-left:4px">['+d.sig.unit+']</span>' : ''}</div>
+            <div class="sv">${d.val.str}</div>
+            <div class="sr">raw=0x${d.val.raw.toString(16).toUpperCase()}  bits[${d.sig.startBit}..${d.sig.startBit+d.sig.length-1}]  factor=${d.sig.factor}  offset=${d.sig.offset}</div>
+           </div>`).join('') + '</div>'
+      : '<div style="padding:10px;color:var(--muted)">No DBC signals for this message.</div>';
+    dtr.classList.add('show'); tr.classList.add('expanded'); expandedRow = tr;
+  }
+}
+
+function tbody() { return document.getElementById('traffic-body'); }
+
+function clearTraffic() {
+  tbody().innerHTML = '';
+  lastRows.clear();
+  allFrames.length = 0;
+  totalFrames = 0;
+  expandedRow = null;
+  document.getElementById('frame-count').textContent = '0 frames';
+  document.getElementById('no-traffic').style.display = '';
+}
+
+function applyFilter() {
+  if (!document.getElementById('last-val-mode').checked) return;
+  const filter = document.getElementById('id-filter').value.trim().toLowerCase();
+  for (const [id, tr] of lastRows) {
+    const idHex = id.toString(16).padStart(3,'0');
+    const show = !filter || ('0x'+idHex).includes(filter) || idHex.includes(filter.replace('0x',''));
+    tr.style.display = show ? '' : 'none';
+    if (tr.nextSibling && tr.nextSibling.classList.contains('sig-detail'))
+      tr.nextSibling.style.display = show ? '' : 'none';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// CONSOLE
+// ══════════════════════════════════════════════════════════════════════
+function addConsole(text, type='rx') {
+  const el = document.getElementById('console-out');
+  const div = document.createElement('div');
+  div.className = 'con-line con-' + type;
+  div.textContent = text;
+  el.appendChild(div);
+  while (el.children.length > 2000) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearConsole() { document.getElementById('console-out').innerHTML = ''; }
+
+function cmdKeyDown(e) { if (e.key === 'Enter') sendConsoleCmd(); }
+
+async function sendConsoleCmd() {
+  const input = document.getElementById('console-cmd');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  input.value = '';
+  addConsole('> ' + cmd, 'tx');
+  await serialWrite(cmd);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// TRANSMIT – MANUAL
+// ══════════════════════════════════════════════════════════════════════
+let canActive = false;
+
+function syncDlcBytes() {
+  const dlc = Math.max(1, Math.min(8, +document.getElementById('tx-dlc').value || 8));
+  const container = document.getElementById('data-bytes');
+  const existing = container.querySelectorAll('.byte-input');
+  if (existing.length === dlc) return;
+  container.innerHTML = '';
+  for (let i = 0; i < dlc; i++) {
+    const inp = document.createElement('input');
+    inp.className = 'byte-input';
+    inp.maxLength = 2;
+    inp.value = (existing[i] ? existing[i].value : '00');
+    inp.placeholder = '00';
+    inp.addEventListener('input', function() {
+      this.value = this.value.replace(/[^0-9a-fA-F]/g,'').toUpperCase().slice(0,2);
+    });
+    container.appendChild(inp);
+  }
+}
+
+async function configureTX() {
+  const id = document.getElementById('tx-id').value.trim();
+  const dlc = document.getElementById('tx-dlc').value;
+  const rate = document.getElementById('tx-rate').value;
+  const bytes = Array.from(document.querySelectorAll('.byte-input')).map(i => i.value.padStart(2,'0')).join(' ');
+  await serialWrite(`SET ID ${id}`);
+  await delay(50);
+  await serialWrite(`SET DLC ${dlc}`);
+  await delay(50);
+  await serialWrite(`SET DATA ${bytes}`);
+  await delay(50);
+  await serialWrite(`SET RATE ${rate}`);
+}
+
+async function canOn()  { await serialWrite('CAN ON');  canActive = true;  updateCanBadge(); }
+async function canOff() { await serialWrite('CAN OFF'); canActive = false; updateCanBadge(); }
+
+function updateCanBadge() {
+  const b = document.getElementById('can-state-badge');
+  b.textContent = canActive ? 'ON' : 'OFF';
+  b.className = canActive ? 'on' : '';
+  // Grey out the button matching the current state; enable the opposite
+  ['tx-on-btn', 'dbc-tx-on-btn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = canActive;
+  });
+  ['tx-off-btn', 'dbc-tx-off-btn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !canActive;
+  });
+}
+
+const delay = ms => new Promise(r => setTimeout(r, ms));
+
+// ══════════════════════════════════════════════════════════════════════
+// TRANSMIT – DBC GUIDED
+// ══════════════════════════════════════════════════════════════════════
+function buildDBCTxPanel() {
+  const sel = document.getElementById('tx-msg-select');
+  sel.innerHTML = '';
+  if (!dbc.messages.size) {
+    document.getElementById('dbc-tx-empty').style.display = '';
+    document.getElementById('dbc-tx-content').style.display = 'none';
+    return;
+  }
+  document.getElementById('dbc-tx-empty').style.display = 'none';
+  document.getElementById('dbc-tx-content').style.display = '';
+  for (const [id, msg] of dbc.messages) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = `${msg.name}  (0x${id.toString(16).toUpperCase().padStart(3,'0')})`;
+    sel.appendChild(opt);
+  }
+  onTxMsgChange();
+}
+
+function onTxMsgChange() {
+  const id = +document.getElementById('tx-msg-select').value;
+  const msg = dbc.messages.get(id);
+  if (!msg) return;
+  document.getElementById('tx-msg-info').textContent = `ID 0x${id.toString(16).toUpperCase().padStart(3,'0')}  DLC ${msg.dlc}  Tx: ${msg.transmitter}`;
+
+  const container = document.getElementById('sig-inputs');
+  container.innerHTML = '';
+  for (const sig of msg.signals) {
+    const box = document.createElement('div');
+    box.className = 'sig-input-box';
+    const rangeStr = sig.valDesc
+      ? Array.from(sig.valDesc).map(([v,d]) => `${v}=${d}`).join(', ')
+      : `${sig.min}..${sig.max}`;
+    box.innerHTML = `<div class="si-label">${sig.name} <span>[${sig.unit||'—'}]  ${rangeStr}</span></div>
+      <input type="number" data-sig="${sig.name}" value="${sig.offset}" step="${sig.factor}" min="${sig.min}" max="${sig.max}" oninput="recalcDbcData()">`;
+    container.appendChild(box);
+  }
+  recalcDbcData();
+}
+
+function recalcDbcData() {
+  const id = +document.getElementById('tx-msg-select').value;
+  const msg = dbc.messages.get(id);
+  if (!msg) return;
+  const bytes = new Uint8Array(msg.dlc);
+  for (const inp of document.querySelectorAll('#sig-inputs input[data-sig]')) {
+    const sig = msg.signals.find(s => s.name === inp.dataset.sig);
+    if (sig) encodeSignalIntoBytes(bytes, sig, +inp.value);
+  }
+  const hex = Array.from(bytes).map(b => b.toString(16).toUpperCase().padStart(2,'0')).join(' ');
+  document.getElementById('dbc-tx-preview').innerHTML = `<span>Data:</span>${hex}`;
+  // Also sync to manual TX panel
+  document.getElementById('tx-id').value = id.toString(16).toUpperCase();
+  document.getElementById('tx-dlc').value = msg.dlc;
+  syncDlcBytes();
+  const byteInputs = document.querySelectorAll('.byte-input');
+  bytes.forEach((b, i) => { if (byteInputs[i]) byteInputs[i].value = b.toString(16).toUpperCase().padStart(2,'0'); });
+}
+
+async function configureFromDBC() {
+  const id = +document.getElementById('tx-msg-select').value;
+  const msg = dbc.messages.get(id);
+  if (!msg) return;
+  const bytes = new Uint8Array(msg.dlc);
+  for (const inp of document.querySelectorAll('#sig-inputs input[data-sig]')) {
+    const sig = msg.signals.find(s => s.name === inp.dataset.sig);
+    if (sig) encodeSignalIntoBytes(bytes, sig, +inp.value);
+  }
+  const rate = document.getElementById('tx-rate').value || '10';
+  const hexBytes = Array.from(bytes).map(b => b.toString(16).toUpperCase().padStart(2,'0')).join(' ');
+  await serialWrite(`SET ID ${id.toString(16).toUpperCase()}`); await delay(50);
+  await serialWrite(`SET DLC ${msg.dlc}`);                      await delay(50);
+  await serialWrite(`SET DATA ${hexBytes}`);                     await delay(50);
+  await serialWrite(`SET RATE ${rate}`);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DBC SIDEBAR
+// ══════════════════════════════════════════════════════════════════════
+function buildSidebar() {
+  const list = document.getElementById('msg-list');
+  list.innerHTML = '';
+  if (!dbc.messages.size) {
+    list.innerHTML = '<div class="no-data">No messages</div>';
+    return;
+  }
+  for (const [id, msg] of dbc.messages) {
+    const div = document.createElement('div');
+    div.className = 'msg-item';
+    div.dataset.id = id;
+    div.innerHTML = `<div class="msg-hdr">
+        <span class="caret">&#9658;</span>
+        <span>${msg.name}</span>
+        <span class="msg-id">0x${id.toString(16).toUpperCase().padStart(3,'0')}</span>
+      </div>
+      <div class="msg-signals">${msg.signals.map(s =>
+        `<div class="sig-entry" title="${s.comment}">${s.name}${s.unit?' ['+s.unit+']':''}</div>`
+      ).join('')}</div>`;
+    div.querySelector('.msg-hdr').addEventListener('click', () => {
+      div.classList.toggle('open');
+    });
+    list.appendChild(div);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DBC FILE LOAD
+// ══════════════════════════════════════════════════════════════════════
+document.getElementById('dbc-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      parseDBC(ev.target.result);
+      const count = dbc.messages.size;
+      const status = document.getElementById('dbc-status');
+      status.textContent = `${file.name}  (${count} messages)`;
+      status.className = 'loaded';
+      buildSidebar();
+      buildDBCTxPanel();
+      addConsole(`[DBC] Loaded "${file.name}" – ${count} messages`, 'sys');
+    } catch (err) {
+      addConsole('[DBC] Parse error: ' + err.message, 'err');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════════
+syncDlcBytes();
+addConsole('BusSim Web UI ready. Load a DBC file then click Connect.', 'sys');
+addConsole('Requires Chrome or Edge (Web Serial API).', 'sys');
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2025 STMicroelectronics.
+  * Copyright (c) 2026 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -55,7 +55,8 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern UART_HandleTypeDef huart3;
+extern PCD_HandleTypeDef hpcd_USB_FS;
+extern CAN_HandleTypeDef hcan;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -199,19 +200,26 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
-  * @brief This function handles USART3 global interrupt.
+  * @brief This function handles USB low priority or CAN RX0 interrupts.
   */
-void USART3_IRQHandler(void)
+void USB_LP_CAN1_RX0_IRQHandler(void)
 {
-  /* USER CODE BEGIN USART3_IRQn 0 */
+  /* USER CODE BEGIN USB_LP_CAN1_RX0_IRQn 0 */
+  /* CubeMX stopped auto-generating this call once USART1 was added to the
+   * project (shared-vector generator quirk on F103 when CAN + USB Device
+   * both attach to USB_LP_CAN1_RX0_IRQn) — kept here in USER CODE so it
+   * survives future "Generate Code" runs regardless. */
+  HAL_PCD_IRQHandler(&hpcd_USB_FS);
+  /* USER CODE END USB_LP_CAN1_RX0_IRQn 0 */
+  /* USER CODE BEGIN USB_LP_CAN1_RX0_IRQn 1 */
 
-  /* USER CODE END USART3_IRQn 0 */
-  HAL_UART_IRQHandler(&huart3);
-  /* USER CODE BEGIN USART3_IRQn 1 */
-
-  /* USER CODE END USART3_IRQn 1 */
+  /* USER CODE END USB_LP_CAN1_RX0_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
-
+/* CAN FIFO1 – exclusive IRQ, no conflict with USB_LP_CAN1_RX0_IRQn */
+void CAN1_RX1_IRQHandler(void)
+{
+  HAL_CAN_IRQHandler(&hcan);
+}
 /* USER CODE END 1 */

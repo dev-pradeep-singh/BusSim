@@ -4,8 +4,8 @@ import time
 
 import serial
 
-PORT = "/dev/tty.usbserial-1130"  # replace with your COM port
-BAUD = 115200  # match USART3 CLI baud
+PORT = "/dev/tty.usbmodem114301"  # run: ls /dev/tty.usbmodem* to find your port
+BAUD = 115200  # USB CDC ignores baud rate; any value works
 LINE_TERMINATOR = "\r\n"
 
 
@@ -47,8 +47,12 @@ def main() -> int:
         print(f"Could not open {PORT}: {exc}")
         return 1
 
-    # Clear any stale input that might have accumulated before we started.
-    ser.reset_input_buffer()
+    # Give the STM32 USB stack time to finish enumeration before asserting DTR.
+    time.sleep(5)
+
+    # Assert DTR – sends SET_CONTROL_LINE_STATE to the STM32, which triggers
+    # the banner. macOS opens with DTR=0 by default, so we set it explicitly.
+    ser.dtr = True
 
     stop_event = threading.Event()
     reader_thread = threading.Thread(target=reader, args=(ser, stop_event), daemon=True)

@@ -1,57 +1,51 @@
+# ── Build output ────────────────────────────────────────────────────────────
 Debug/
-.DS_Store
-# Prerequisites
-*.d
+Release/
+build/
 
-# Object files
+# ── STM32CubeIDE / Eclipse artefacts ────────────────────────────────────────
+.metadata/
+.settings/
+.cproject
+.project
+.mxproject
+*.launch
+
+# ── STM32CubeIDE / Eclipse artefacts ────────────────────────────────────────
+.vscode/
+
+# ── Object / dependency / analysis files (if ever outside Debug/) ───────────
 *.o
-*.ko
-*.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
-
-# Debug files
-*.dSYM/
+*.d
 *.su
-*.idb
-*.pdb
+*.cyclo
+*.elf
+*.bin
+*.hex
+*.map
+*.list
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# ── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
 
-# debug information files
-*.dwo
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ── Arduino IDE build artefacts ──────────────────────────────────────────────
+build/
+*.ino.elf
+*.ino.hex
+*.ino.bin
+
+# ── Editor swap / backup files ───────────────────────────────────────────────
+*.swp
+*.swo
+*~
+
+# ── LLM session notes (local-only, not shared via git) ──────────────────────
+CLAUDE.md

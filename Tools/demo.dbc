@@ -1,0 +1,144 @@
+VERSION ""
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_DEF_DEF_
+	BA_
+	EV_DATA_
+	ENVVAR_DATA_
+	SGTYPE_
+	SGTYPE_VAL_
+	BA_DEF_SGTYPE_
+	BA_DEF_SGTYPE_DEF_
+	BA_SGTYPE_
+	SIG_TYPE_REF_
+	VAL_DESC_
+	SIG_GROUP_
+	SIG_VALTYPE_
+	SIGTYPE_VALTYPE_
+	BO_TX_BU_
+	BA_DEF_REL_
+	BA_VAL_
+	BA_DEF_DEF_REL_
+	BA_REL_
+	BA_DEF_BU_
+	BA_DEF_BU_DEF_
+	BA_BU_
+	FILTER
+	CAT_DEF_
+	CAT_
+
+BS_:
+
+BU_: ECU_Engine ECU_ABS ECU_TCU ECU_BMS BusSim DiagTester
+
+/* ── Engine Control Unit – 10 ms ────────────────────────────────────────── */
+BO_ 256 EngineData: 8 ECU_Engine
+ SG_ RPM           : 0|16@1+  (0.25,0)       [0|16383.75] "rpm"  BusSim,DiagTester
+ SG_ ThrottlePos   : 16|8@1+  (0.392157,0)   [0|100]      "%"    BusSim
+ SG_ CoolantTemp   : 24|8@1+  (1,-40)        [-40|215]    "degC" BusSim
+ SG_ EngineLoad    : 32|8@1+  (0.392157,0)   [0|100]      "%"    BusSim
+ SG_ EngineStatus  : 40|8@1+  (1,0)          [0|255]      ""     BusSim
+
+/* ── Anti-lock Braking System – 10 ms ───────────────────────────────────── */
+BO_ 512 VehicleSpeed: 8 ECU_ABS
+ SG_ VehicleSpeed  : 0|16@1+  (0.01,0)       [0|250]      "km/h" BusSim,ECU_TCU
+ SG_ WheelSpeedFL  : 16|16@1+ (0.01,0)       [0|250]      "km/h" BusSim
+ SG_ WheelSpeedFR  : 32|16@1+ (0.01,0)       [0|250]      "km/h" BusSim
+ SG_ WheelSpeedRL  : 48|8@1+  (1,0)          [0|250]      "km/h" BusSim
+ SG_ WheelSpeedRR  : 56|8@1+  (1,0)          [0|250]      "km/h" BusSim
+
+/* ── Transmission Control Unit – 20 ms ─────────────────────────────────── */
+BO_ 768 TransmissionData: 4 ECU_TCU
+ SG_ GearPosition      : 0|4@1+  (1,0)       [0|9]        ""     BusSim
+ SG_ SelectedGear      : 4|4@1+  (1,0)       [0|9]        ""     BusSim
+ SG_ TransmissionTemp  : 8|8@1+  (1,-40)     [-40|215]    "degC" BusSim
+ SG_ TransmissionMode  : 16|8@1+ (1,0)       [0|3]        ""     BusSim
+
+/* ── Battery Management System – 100 ms ─────────────────────────────────── */
+BO_ 1024 BatteryStatus: 8 ECU_BMS
+ SG_ BattVoltage      : 0|16@1+  (0.01,0)    [0|100]      "V"    BusSim,DiagTester
+ SG_ BattCurrent      : 16|16@1- (0.1,0)     [-3276.8|3276.7] "A" BusSim
+ SG_ BattSOC          : 32|8@1+  (0.392157,0)[0|100]      "%"    BusSim
+ SG_ BattTemp         : 40|8@1+  (1,-40)     [-40|85]     "degC" BusSim
+ SG_ BattCellVoltMax  : 48|8@1+  (0.02,0)    [0|5.1]      "V"    BusSim
+ SG_ BattCellVoltMin  : 56|8@1+  (0.02,0)    [0|5.1]      "V"    BusSim
+
+/* ── BusSim default test frame – configurable rate (default 10 Hz) ───────
+   Default payload DE AD BE EF 00 00 00 00 maps to:
+     Counter    = 0xDE (222)
+     TestValue  = 0xBEAD = 48813 → 4881.3 (raw demo value)
+     Flags      = 0xEF  (bit0=CANActive, bit1=ListenMode, bit2=Error, ...)
+     Temperature= 0x00  → -40 degC  (change with: SET DATA xx xx xx xx <temp+40> ...)
+     Voltage    = 0x00  →  0.0 V
+     Reserved   = 0x0000
+   Use "SET DATA" to put live values in bytes 4-7 during demo.            */
+BO_ 291 BusSimHeartbeat: 8 BusSim
+ SG_ Counter     : 0|8@1+  (1,0)        [0|255]   ""     Vector__XXX
+ SG_ TestValue   : 8|16@1+ (0.1,0)      [0|6553.5] ""    Vector__XXX
+ SG_ Flags       : 24|8@1+ (1,0)        [0|255]   ""     Vector__XXX
+ SG_ Temperature : 32|8@1+ (1,-40)      [-40|215] "degC" Vector__XXX
+ SG_ Voltage     : 40|8@1+ (0.1,0)      [0|25.5]  "V"    Vector__XXX
+ SG_ Reserved    : 48|16@1+ (1,0)       [0|65535] ""     Vector__XXX
+
+/* ── UDS functional request (ISO 14229-1) – event-driven ────────────────── */
+BO_ 2015 DiagRequest: 8 DiagTester
+ SG_ ServiceID      : 0|8@1+  (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ SubFunction    : 8|8@1+  (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ DataIdentifier : 16|16@1+ (1,0)    [0|65535] ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ RequestData_0  : 32|8@1+ (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ RequestData_1  : 40|8@1+ (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ RequestData_2  : 48|8@1+ (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ RequestData_3  : 56|8@1+ (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+
+/* ── Node comments ───────────────────────────────────────────────────────── */
+CM_ BU_ ECU_Engine  "Engine Control Unit";
+CM_ BU_ ECU_ABS     "Anti-lock Braking System controller";
+CM_ BU_ ECU_TCU     "Transmission Control Unit";
+CM_ BU_ ECU_BMS     "Battery Management System (high-voltage pack)";
+CM_ BU_ BusSim      "STM32F103C8T6 CAN+LIN Bus Simulator (CAN side) – this device";
+CM_ BU_ DiagTester  "Off-board UDS diagnostic tester";
+
+/* ── Message comments ────────────────────────────────────────────────────── */
+CM_ BO_ 256  "Engine operating data – 10 ms cyclic";
+CM_ BO_ 512  "Wheel speeds and derived vehicle speed – 10 ms cyclic";
+CM_ BO_ 768  "Transmission gear and temperature – 20 ms cyclic";
+CM_ BO_ 1024 "High-voltage battery pack status – 100 ms cyclic";
+CM_ BO_ 291  "BusSim periodic test frame (default ID 0x123). Configure with SET ID / SET DATA / SET RATE commands.";
+CM_ BO_ 2015 "UDS functional request broadcast to all ECUs (ISO 14229-1)";
+
+/* ── Signal comments ─────────────────────────────────────────────────────── */
+CM_ SG_ 256 RPM          "Engine crankshaft speed. Resolution 0.25 rpm/bit.";
+CM_ SG_ 256 CoolantTemp  "Engine coolant temperature. Offset -40 degC.";
+CM_ SG_ 256 EngineStatus "Bit0=EngineRunning Bit1=MIL Bit2=CruiseActive Bit3=ACRequest";
+CM_ SG_ 512 VehicleSpeed "Vehicle speed derived from four wheel sensors.";
+CM_ SG_ 768 GearPosition "Physical position of the gear lever.";
+CM_ SG_ 768 SelectedGear "Gear currently engaged by the TCU.";
+CM_ SG_ 768 TransmissionMode "Active drive programme.";
+CM_ SG_ 1024 BattCurrent "Positive = charging, negative = discharging.";
+CM_ SG_ 1024 BattSOC     "State of charge. Resolution 0.39 %/bit.";
+CM_ SG_ 291 Counter      "Increments 0-255 with every transmitted frame. Use to detect dropped frames.";
+CM_ SG_ 291 Flags        "Bit0=CANActive Bit1=ListenMode Bit2=TxError";
+
+/* ── Enumeration values ──────────────────────────────────────────────────── */
+VAL_ 768 GearPosition 0 "P" 1 "R" 2 "N" 3 "D" 4 "1st" 5 "2nd" 6 "3rd" 7 "4th" 8 "5th" 9 "6th";
+VAL_ 768 SelectedGear 0 "P" 1 "R" 2 "N" 3 "D" 4 "1st" 5 "2nd" 6 "3rd" 7 "4th" 8 "5th" 9 "6th";
+VAL_ 768 TransmissionMode 0 "Normal" 1 "Sport" 2 "Manual" 3 "Winter";
+
+/* ── Message cycle times (ms) ────────────────────────────────────────────── */
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
+BA_DEF_DEF_ "GenMsgCycleTime" 0;
+BA_ "GenMsgCycleTime" BO_ 256  10;
+BA_ "GenMsgCycleTime" BO_ 512  10;
+BA_ "GenMsgCycleTime" BO_ 768  20;
+BA_ "GenMsgCycleTime" BO_ 1024 100;
+BA_ "GenMsgCycleTime" BO_ 291  100;
+BA_ "GenMsgCycleTime" BO_ 2015 0;
+
+/* ── Send types ──────────────────────────────────────────────────────────── */
+BA_DEF_ BO_ "GenMsgSendType" ENUM "Cyclic" "Event" "NoMsgSendType";
+BA_DEF_DEF_ "GenMsgSendType" "Cyclic";
+BA_ "GenMsgSendType" BO_ 2015 "Event";
+

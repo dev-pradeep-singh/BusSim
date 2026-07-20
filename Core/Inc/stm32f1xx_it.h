@@ -6,14 +6,14 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2025 STMicroelectronics.
+  * Copyright (c) 2026 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
   * in the root directory of this software component.
   * If no LICENSE file comes with this software, it is provided AS-IS.
   *
- ******************************************************************************
+  ******************************************************************************
   */
 /* USER CODE END Header */
 
@@ -22,7 +22,7 @@
 #define __STM32F1xx_IT_H
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 /* Private includes ----------------------------------------------------------*/
@@ -55,9 +55,9 @@ void SVC_Handler(void);
 void DebugMon_Handler(void);
 void PendSV_Handler(void);
 void SysTick_Handler(void);
-void USART3_IRQHandler(void);
+void USB_LP_CAN1_RX0_IRQHandler(void);
 /* USER CODE BEGIN EFP */
-
+void CAN1_RX1_IRQHandler(void);
 /* USER CODE END EFP */
 
 #ifdef __cplusplus
