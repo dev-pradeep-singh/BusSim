@@ -2,7 +2,7 @@
 
 > **A cost-effective open-source alternative to professional CAN/LIN bus interfaces** such as Vector CANalyzer/CANoe, PEAK PCAN, or Kvaser — built on a ~$2 STM32F103C8T6 Blue Pill board.
 
-BusSim transmits and receives CAN frames — with a browser-based Web UI for live DBC-decoded traffic display and message transmission — and separately drives a LIN bus as master and/or slave-response node via CLI. Everything runs over a **USB CDC virtual COM port** — no UART adapter, no native drivers, no expensive licences.
+BusSim transmits and receives CAN & LIN frames — with a browser-based Web UI for live Database(DBC,LDF) decoded traffic display and message transmission. Everything runs over a **USB CDC virtual COM port** — no UART adapter, no native drivers, no expensive licences.
 
 ---
 
@@ -13,10 +13,10 @@ Professional CAN/LIN bus tools — Vector CANalyzer, CANoe, PEAK PCAN, Kvaser �
 | | BusSim | Typical commercial tool |
 |---|---|---|
 | 💰 **Hardware cost** | ~$2–5 (Blue Pill + TJA1051); +MCP2004 for LIN | $200–$2000+ |
-| 🚌 **Bus support** | CAN (Web UI + CLI) and LIN (CLI, master/slave-response) | Usually both, gated behind pricier tiers |
+| 🚌 **Bus support** | CAN + LIN (Web UI + CLI), LIN master/slave-response | Usually both, gated behind pricier tiers |
 | 🔌 **Driver required** | None (USB CDC) | Vendor driver |
-| 🌐 **UI** | Browser-based, no install (CAN) | Windows app / licence |
-| 📋 **DBC decode** | ✅ built-in (CAN) | ✅ (paid licence) |
+| 🌐 **UI** | Browser-based, no install (CAN + LIN) | Windows app / licence |
+| 📋 **DBC/LDF decode** | ✅ built-in (CAN DBC + LIN LDF) | ✅ (paid licence) |
 | 🔧 **Open source** | ✅ fully | ❌ proprietary |
 
 ---
@@ -32,9 +32,9 @@ Professional CAN/LIN bus tools — Vector CANalyzer, CANoe, PEAK PCAN, Kvaser �
 | ⌨️ **CLI commands** | `HELP STATUS CAN LIN SET LISTEN STATS` |
 | 👁️ **RX display** | Received CAN and LIN frames printed when `LISTEN ON` |
 | 🔀 **Pin conflict workaround** | CAN remapped to PB8/PB9 via AFIO; RX routed to FIFO1 to avoid shared USB/CAN IRQ |
-| 🌐 **Web UI** | Single-file HTML app — loads DBC, decodes live traffic, transmits frames via Web Serial |
+| 🌐 **Web UI** | Single-file HTML app — loads DBC/LDF, decodes live CAN + LIN traffic, transmits both via Web Serial |
 | 📋 **Demo DBC** | Automotive demo file (Engine, ABS, TCU, BMS, UDS) matching real frame formats |
-| 🔌 **Arduino DUT** | Arduino Nano + MCP2515 sketch simulating a full drive-cycle for bench testing |
+| 🔌 **Arduino CAN DUT** | Arduino Nano + MCP2515 sketch simulating a full drive-cycle for bench testing |
 
 ---
 
@@ -184,16 +184,17 @@ RX  ID:0x7DF  DLC:8  DATA: 02 10 03 AA BB CC DD EE
 
 ## 🌐 Web UI
 
-Open **[Tools/webui.html](Tools/webui.html)** directly in Chrome or Edge (no server needed).
+Open **[Tools/webui.html](Tools/webui.html)** directly in Chrome or Edge (no server needed). The demo CAN/LIN databases (`CANSim_DUT.dbc` / `LINSim_DUT.ldf`) are embedded in the page itself and auto-load on open — no fetch, so this works whether the file is double-clicked or served over http(s).
 
 | Feature | Detail |
 |---------|--------|
-| 📂 **Load DBC** | Click Load DBC → select a `.dbc` file; signals appear in the sidebar |
 | 🔗 **Connect** | Click Connect → pick the Blue Pill CDC port via the Web Serial picker |
-| 📊 **Traffic view** | Last-Value mode (one row per ID, updated live) or Log mode (append every frame) |
-| 🔍 **Signal decode** | Intel/Motorola byte order, factor/offset, unit; click any row to expand all signals |
-| 📡 **Transmit** | Manual hex bytes or DBC-guided (select message, fill physical values, auto-encode) |
-| 🖥️ **Console** | Raw serial I/O; "Show CAN frames" checkbox to opt-in to frame echo |
+| 🗄️ **Database tab** | Load DBC / Load LDF buttons to switch to a different file at any time |
+| 📚 **Sidebar** | CAN Messages / LIN Messages lists (from the loaded DBC/LDF); click a message/frame to expand its signals |
+| 📡 **Traffic tab** | Bus column (`CAN`/`LIN`) alongside Dir/ID/Name/DLC/Data/Signals; Last-Value mode (one row per bus+ID+direction, updated live) or Log mode (append every frame, capped at 2000 rows) |
+| 🔍 **Signal decode** | CAN via the loaded DBC (Intel/Motorola byte order, factor/offset, unit); LIN via the loaded LDF (bit offsets, raw integer values — this project's LDF doesn't define factor/offset/unit) |
+| 📤 **Transmit tab** | Separate **CAN Transmit** (manual hex bytes, or DBC-guided: pick a message, fill physical values, auto-encoded) and **LIN Transmit** (Manual Transmit with a Master/Slave mode selector, periodic schedule via Configure/Tx ON, and a Send Once button; plus Slave Auto-Response to register/clear a reply for a given ID) sections |
+| 🖥️ **Console tab** | Raw serial I/O; "Show CAN/LIN frames" checkbox opts in to frame echo (off by default — CAN can run at 100 Hz) |
 
 > Uses the **Web Serial API** — Chrome 89+ / Edge 89+ required. Not supported in Firefox or Safari.
 
@@ -201,7 +202,7 @@ Open **[Tools/webui.html](Tools/webui.html)** directly in Chrome or Edge (no ser
 
 ## 📋 Demo DBC
 
-**[Tools/demo.dbc](Tools/demo.dbc)** defines six automotive messages that the Arduino DUT transmits:
+**[Tools/CANSim_DUT/CANSim_DUT.dbc](Tools/CANSim_DUT/CANSim_DUT.dbc)** defines six automotive messages that the Arduino CAN DUT transmits — this is also the CAN database the Web UI embeds and auto-loads on open:
 
 | ID | Name | Rate | Key Signals |
 |----|------|------|-------------|
@@ -214,9 +215,9 @@ Open **[Tools/webui.html](Tools/webui.html)** directly in Chrome or Edge (no ser
 
 ---
 
-## 🔌 Arduino DUT (Device Under Test)
+## 🔌 Arduino CAN DUT (Device Under Test)
 
-**[Tools/CANSim_DUT/CANSim_DUT.ino](Tools/CANSim_DUT/CANSim_DUT.ino)** — Arduino Nano + MCP2515 sketch for bench testing.
+**[Tools/CANSim_DUT/CANSim_DUT.ino](Tools/CANSim_DUT/CANSim_DUT.ino)** — Arduino Nano + MCP2515 sketch for bench testing. This is a separate physical board from the Arduino LIN DUT below — one Nano per bus, not one board doing both.
 
 ### Hardware
 
@@ -241,7 +242,7 @@ Set `MCP_8MHZ` or `MCP_16MHZ` to match the crystal on your module.
 
 ## 🔌 Arduino LIN DUT (LIN bus test harness)
 
-**[Tools/LINSim_DUT_LIN/LINSim_DUT_LIN.ino](Tools/LINSim_DUT_LIN/LINSim_DUT_LIN.ino)** — a second, dedicated Arduino Nano + [LINTTL3](Tools/wiring_diagram.md) transceiver, acting as a LIN master test harness for the STM32's LIN side.
+**[Tools/LINSim_DUT/LINSim_DUT_LIN.ino](Tools/LINSim_DUT/LINSim_DUT_LIN.ino)** — a second, dedicated Arduino Nano + [LINTTL3](Tools/wiring_diagram.md) transceiver, acting as a LIN master test harness for the STM32's LIN side. An MCP2004 module (the same transceiver used on the main STM32 board) also works here as an alternative to LINTTL3 — see [Tools/wiring_diagram.md](Tools/wiring_diagram.md) for both pinouts. [Tools/LINSim_DUT/LINSim_DUT.ldf](Tools/LINSim_DUT/LINSim_DUT.ldf) describes its frames/signals and is the LIN database the Web UI embeds and auto-loads on open.
 
 Minimal test harness (not a full simulated LIN network):
 - `0x10` — self-contained master-response frame, ~1 Hz incrementing counter
@@ -277,14 +278,15 @@ BusSim/
 ├── Middlewares/                 STM32 USB Device Library
 ├── USB_DEVICE/                  CDC class instance
 └── Tools/
-    ├── webui.html               Single-file Web UI (no dependencies)
-    ├── demo.dbc                 Automotive demo DBC
+    ├── webui.html               Single-file Web UI (no dependencies; embeds the demo DBC/LDF below)
     ├── pyserialScript.py        Python host CLI script
     ├── wiring_diagram.md        Pin-out and transceiver wiring
     ├── CANSim_DUT/
-    │   └── CANSim_DUT.ino       Arduino Nano + MCP2515 CAN DUT sketch
-    └── LINSim_DUT_LIN/
-        └── LINSim_DUT_LIN.ino   Arduino Nano + LINTTL3 LIN DUT sketch
+    │   ├── CANSim_DUT.ino       Arduino Nano + MCP2515 CAN DUT sketch
+    │   └── CANSim_DUT.dbc       Automotive demo DBC
+    └── LINSim_DUT/
+        ├── LINSim_DUT_LIN.ino   Arduino Nano + LINTTL3 LIN DUT sketch
+        └── LINSim_DUT.ldf       Demo LDF (frames 0x10/0x20/0x30)
 ```
 
 ---
