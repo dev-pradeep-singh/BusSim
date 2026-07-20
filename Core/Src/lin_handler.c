@@ -131,6 +131,23 @@ static uint8_t lin_calc_checksum(uint8_t pid, const uint8_t *data, uint8_t len)
     return (uint8_t)(~sum & 0xFFU);
 }
 
+/* Shared TX print, used by both the master schedule/one-shot path
+ * (lin_tx_frame()) and the slave auto-response path (lin_rx_feed()) — the
+ * latter used to transmit its reply directly via HAL_UART_Transmit() without
+ * ever printing it, so a registered LIN RESP never showed up in LISTEN
+ * output or the webui Traffic tab even though it was correctly answered on
+ * the wire. */
+static void lin_print_tx(uint8_t id, const uint8_t *data, uint8_t len)
+{
+    if (!ctx.listen_mode) return;
+    char buf[72];
+    int  n = snprintf(buf, sizeof(buf), "LIN TX  ID:0x%02X  DATA:", id & 0x3FU);
+    for (uint8_t i = 0; i < len; i++)
+        n += snprintf(buf + n, sizeof(buf) - (size_t)n, " %02X", data[i]);
+    buf[n++] = '\r'; buf[n++] = '\n';
+    pb_write(buf, (uint16_t)n);
+}
+
 /* ── Master frame TX: break + sync + PID [+ data + checksum] ─────────────── */
 static void lin_tx_frame(uint8_t id, const uint8_t *data, uint8_t len)
 {
@@ -159,15 +176,7 @@ static void lin_tx_frame(uint8_t id, const uint8_t *data, uint8_t len)
     ctx.tx_in_progress = false;
 
     ctx.stats.tx_count++;
-    if (ctx.listen_mode)
-    {
-        char buf[72];
-        int  n = snprintf(buf, sizeof(buf), "LIN TX  ID:0x%02X  DATA:", id & 0x3FU);
-        for (uint8_t i = 0; i < len; i++)
-            n += snprintf(buf + n, sizeof(buf) - (size_t)n, " %02X", data[i]);
-        buf[n++] = '\r'; buf[n++] = '\n';
-        pb_write(buf, (uint16_t)n);
-    }
+    lin_print_tx(id, data, len);
 }
 
 /* ── RX bus-monitor state machine ─────────────────────────────────────────
@@ -236,6 +245,7 @@ static void lin_rx_feed(uint8_t byte)
             HAL_UART_Transmit(&huart1, &chk, 1U, 5U);
             lin_cs_disable();
             ctx.stats.tx_count++;
+            lin_print_tx(rx.id, r->data, r->len);
             rx.state = LIN_RX_IDLE;   /* our reply echoes back too — don't recapture it */
         }
         break;

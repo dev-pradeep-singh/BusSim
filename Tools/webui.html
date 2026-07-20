@@ -30,8 +30,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
   flex-shrink: 0;
 }
 #header .brand { font-size: 15px; font-weight: 700; color: var(--cyan); letter-spacing: .5px; margin-right: 8px; }
-#dbc-status { color: var(--muted); font-size: 12px; flex: 1; }
-#dbc-status.loaded { color: var(--green); }
+.db-status { color: var(--muted); font-size: 12px; }
+.db-status.loaded { color: var(--green); }
 .btn {
   padding: 4px 12px; border-radius: 5px; border: 1px solid var(--border);
   background: var(--surf2); color: var(--text); cursor: pointer; font-size: 12px;
@@ -59,12 +59,13 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
   border-right: 1px solid var(--border); display: flex; flex-direction: column;
   overflow: hidden;
 }
-#sidebar-title {
+.sidebar-title {
   padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--muted);
   text-transform: uppercase; letter-spacing: .8px; border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-#msg-list { overflow-y: auto; flex: 1; padding: 4px 0; }
+.sidebar-title.divider { border-top: 1px solid var(--border); }
+.msg-list { overflow-y: auto; flex: 1; padding: 4px 0; }
 .msg-item { cursor: pointer; }
 .msg-item .msg-hdr {
   padding: 5px 10px; font-size: 12px; display: flex; align-items: center; gap: 5px;
@@ -134,6 +135,8 @@ td.id-cell { font-family: monospace; font-weight: 700; }
 .id-unknown { color: var(--muted); }
 .dir-rx { color: var(--green); font-size: 11px; font-weight: 700; font-family: monospace; }
 .dir-tx { color: var(--amber); font-size: 11px; font-weight: 700; font-family: monospace; }
+.bus-can { color: var(--blue); font-size: 11px; font-weight: 700; font-family: monospace; }
+.bus-lin { color: var(--cyan); font-size: 11px; font-weight: 700; font-family: monospace; }
 td.name-cell { color: var(--text); }
 td.data-cell { font-family: monospace; color: var(--amber); font-size: 11px; }
 td.sig-cell { max-width: 300px; }
@@ -177,6 +180,7 @@ tr.expanded td { background: var(--surf2); }
 
 /* ── Transmit panel ──────────────────────────────────────────────────── */
 #tab-transmit { overflow-y: auto; padding: 14px; gap: 14px; }
+#tab-database { overflow-y: auto; padding: 14px; gap: 14px; }
 .tx-card {
   background: var(--surf); border: 1px solid var(--border); border-radius: 8px;
   padding: 14px; flex-shrink: 0;
@@ -192,7 +196,7 @@ tr.expanded td { background: var(--surf2); }
 .tx-input.wide { width: 200px; }
 .tx-input.small { width: 60px; }
 .tx-input.tiny { width: 38px; }
-#data-bytes { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.byte-list { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .byte-input {
   width: 34px; padding: 5px 4px; text-align: center; background: var(--surf2);
   border: 1px solid var(--border); color: var(--amber); font-family: monospace;
@@ -200,11 +204,16 @@ tr.expanded td { background: var(--surf2); }
 }
 .byte-input:focus { outline: none; border-color: var(--amber); }
 .can-ctrl { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
-#can-state-badge {
+.state-badge {
   padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 700;
   background: var(--surf2); color: var(--muted); border: 1px solid var(--border);
 }
-#can-state-badge.on { background: rgba(74,222,128,.15); color: var(--green); border-color: var(--green); }
+.state-badge.on { background: rgba(74,222,128,.15); color: var(--green); border-color: var(--green); }
+.tx-section-title {
+  font-size: 13px; font-weight: 700; color: var(--text); text-transform: uppercase;
+  letter-spacing: .6px; padding-bottom: 6px; margin-bottom: 2px; border-bottom: 1px solid var(--border);
+}
+.tx-section-title.divider { margin-top: 20px; }
 
 /* DBC guided TX */
 .dbc-tx-header { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
@@ -242,9 +251,6 @@ select option { background: var(--surf2); }
 <!-- Header -->
 <div id="header">
   <span class="brand">&#x1F68C; BusSim</span>
-  <span id="dbc-status">No DBC loaded</span>
-  <button class="btn" onclick="document.getElementById('dbc-file').click()">Load DBC</button>
-  <input type="file" id="dbc-file" accept=".dbc" style="display:none">
   <div style="flex:1"></div>
   <span id="conn-dot"></span>
   <span id="conn-label">Disconnected</span>
@@ -260,8 +266,10 @@ select option { background: var(--surf2); }
 
   <!-- Sidebar -->
   <div id="sidebar">
-    <div id="sidebar-title">DBC Messages</div>
-    <div id="msg-list"><div class="no-data">Load a .dbc file</div></div>
+    <div class="sidebar-title">CAN Messages</div>
+    <div id="msg-list" class="msg-list"><div class="no-data">Load a .dbc file</div></div>
+    <div class="sidebar-title divider">LIN Messages</div>
+    <div id="lin-msg-list" class="msg-list"><div class="no-data">Load a .ldf file</div></div>
   </div>
 
   <!-- Workspace -->
@@ -270,6 +278,7 @@ select option { background: var(--surf2); }
       <button class="tab active" data-tab="traffic" onclick="switchTab('traffic')">&#x1F4E1; Traffic</button>
       <button class="tab" data-tab="console"  onclick="switchTab('console')">&#x1F5A5; Console</button>
       <button class="tab" data-tab="transmit" onclick="switchTab('transmit')">&#x1F4E4; Transmit</button>
+      <button class="tab" data-tab="database" onclick="switchTab('database')">&#x1F5C4; Database</button>
       <div class="spacer"></div>
       <span id="frame-count">0 frames</span>
     </div>
@@ -287,6 +296,7 @@ select option { background: var(--surf2); }
           <thead>
             <tr>
               <th style="width:88px">Time</th>
+              <th style="width:40px;text-align:center">Bus</th>
               <th style="width:28px;text-align:center">Dir</th>
               <th style="width:44px;text-align:right" title="Frame count">Count</th>
               <th style="width:58px">ID</th>
@@ -306,7 +316,7 @@ select option { background: var(--surf2); }
     <div class="panel" id="tab-console">
       <div class="toolbar">
         <button class="btn" onclick="clearConsole()">Clear</button>
-        <label><input type="checkbox" id="console-frames"> Show CAN frames</label>
+        <label><input type="checkbox" id="console-frames"> Show CAN/LIN frames</label>
         <span style="color:var(--muted);font-size:11px;margin-left:4px">Green = device output &nbsp; Blue = sent commands</span>
       </div>
       <div id="console-out"></div>
@@ -318,6 +328,8 @@ select option { background: var(--surf2); }
 
     <!-- Transmit panel -->
     <div class="panel" id="tab-transmit">
+
+      <div class="tx-section-title">&#x1F697; CAN Transmit</div>
 
       <!-- Manual TX -->
       <div class="tx-card">
@@ -333,13 +345,13 @@ select option { background: var(--surf2); }
         </div>
         <div class="field-row">
           <label>Data</label>
-          <div id="data-bytes"></div>
+          <div id="data-bytes" class="byte-list"></div>
         </div>
         <div class="can-ctrl">
           <button class="btn primary" onclick="configureTX()">Configure</button>
           <button class="btn success" id="tx-on-btn"  onclick="canOn()">Tx ON</button>
           <button class="btn danger"  id="tx-off-btn" onclick="canOff()" disabled>Tx OFF</button>
-          <span id="can-state-badge">OFF</span>
+          <span id="can-state-badge" class="state-badge">OFF</span>
         </div>
       </div>
 
@@ -363,9 +375,326 @@ select option { background: var(--surf2); }
         </div>
       </div>
 
+      <div class="tx-section-title divider">&#x1F68C; LIN Transmit</div>
+
+      <!-- LIN Manual TX -->
+      <div class="tx-card">
+        <h3>&#x270F; Manual Transmit</h3>
+        <div class="field-row">
+          <label>Mode</label>
+          <select class="tx-input" id="lin-mode-select" onchange="linSetMode()">
+            <option value="SLAVE" selected>Slave</option>
+            <option value="MASTER">Master</option>
+          </select>
+          <span style="color:var(--muted);font-size:11px">Slave blocks this node's own header TX (LIN ON / Send Once)</span>
+        </div>
+        <div class="field-row">
+          <label>ID</label>
+          <input class="tx-input small" id="lin-tx-id" value="10" placeholder="hex" oninput="syncLinDlcBytes()">
+          <label style="margin-left:8px">DLC</label>
+          <input class="tx-input tiny" id="lin-tx-dlc" type="number" min="1" max="8" value="8" oninput="syncLinDlcBytes()">
+          <label style="margin-left:8px">Rate</label>
+          <input class="tx-input tiny" id="lin-tx-rate" type="number" min="1" max="100" value="10">
+          <span style="color:var(--muted);font-size:12px">Hz</span>
+        </div>
+        <div class="field-row">
+          <label>Data</label>
+          <div id="lin-data-bytes" class="byte-list"></div>
+        </div>
+        <div class="can-ctrl">
+          <button class="btn primary" onclick="configureLinTX()">Configure</button>
+          <button class="btn success" id="lin-tx-on-btn"  onclick="linOn()">Tx ON</button>
+          <button class="btn danger"  id="lin-tx-off-btn" onclick="linOff()" disabled>Tx OFF</button>
+          <button class="btn" onclick="linSendOnce()">Send Once</button>
+          <span id="lin-state-badge" class="state-badge">OFF</span>
+        </div>
+      </div>
+
+      <!-- LIN Slave Auto-Response -->
+      <div class="tx-card">
+        <h3>&#x1F501; Slave Auto-Response</h3>
+        <div class="field-row">
+          <label>ID</label>
+          <input class="tx-input small" id="lin-resp-id" value="20" placeholder="hex">
+          <label style="margin-left:8px">Data</label>
+          <input class="tx-input wide" id="lin-resp-data" placeholder="AA BB CC">
+        </div>
+        <div class="can-ctrl">
+          <button class="btn primary" onclick="registerLinResp()">Register</button>
+          <button class="btn danger" onclick="clearLinResp()">Clear</button>
+        </div>
+      </div>
+
     </div><!-- /transmit -->
+
+    <!-- Database panel -->
+    <div class="panel" id="tab-database">
+      <div class="tx-card">
+        <h3>&#x1F697; CAN Database (DBC)</h3>
+        <div class="field-row">
+          <button class="btn" onclick="document.getElementById('dbc-file').click()">Load DBC</button>
+          <input type="file" id="dbc-file" accept=".dbc" style="display:none">
+          <span id="dbc-status" class="db-status">No DBC loaded</span>
+        </div>
+      </div>
+
+      <div class="tx-card">
+        <h3>&#x1F68C; LIN Database (LDF)</h3>
+        <div class="field-row">
+          <button class="btn" onclick="document.getElementById('ldf-file').click()">Load LDF</button>
+          <input type="file" id="ldf-file" accept=".ldf" style="display:none">
+          <span id="ldf-status" class="db-status">No LDF loaded</span>
+        </div>
+      </div>
+    </div><!-- /database -->
+
   </div><!-- /workspace -->
 </div><!-- /layout -->
+
+<!-- Embedded default databases (see DEFAULT DATABASE AUTO-LOAD below) —
+     kept as inert text/plain blocks so no server / fetch() is needed;
+     content mirrors Tools/CANSim_DUT/CANSim_DUT.dbc and Tools/LINSim_DUT/LINSim_DUT.ldf. -->
+<script type="text/plain" id="default-dbc-data">
+VERSION ""
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_DEF_DEF_
+	BA_
+	EV_DATA_
+	ENVVAR_DATA_
+	SGTYPE_
+	SGTYPE_VAL_
+	BA_DEF_SGTYPE_
+	BA_DEF_SGTYPE_DEF_
+	BA_SGTYPE_
+	SIG_TYPE_REF_
+	VAL_DESC_
+	SIG_GROUP_
+	SIG_VALTYPE_
+	SIGTYPE_VALTYPE_
+	BO_TX_BU_
+	BA_DEF_REL_
+	BA_VAL_
+	BA_DEF_DEF_REL_
+	BA_REL_
+	BA_DEF_BU_
+	BA_DEF_BU_DEF_
+	BA_BU_
+	FILTER
+	CAT_DEF_
+	CAT_
+
+BS_:
+
+BU_: ECU_Engine ECU_ABS ECU_TCU ECU_BMS BusSim DiagTester
+
+/* ── Engine Control Unit – 10 ms ────────────────────────────────────────── */
+BO_ 256 EngineData: 8 ECU_Engine
+ SG_ RPM           : 0|16@1+  (0.25,0)       [0|16383.75] "rpm"  BusSim,DiagTester
+ SG_ ThrottlePos   : 16|8@1+  (0.392157,0)   [0|100]      "%"    BusSim
+ SG_ CoolantTemp   : 24|8@1+  (1,-40)        [-40|215]    "degC" BusSim
+ SG_ EngineLoad    : 32|8@1+  (0.392157,0)   [0|100]      "%"    BusSim
+ SG_ EngineStatus  : 40|8@1+  (1,0)          [0|255]      ""     BusSim
+
+/* ── Anti-lock Braking System – 10 ms ───────────────────────────────────── */
+BO_ 512 VehicleSpeed: 8 ECU_ABS
+ SG_ VehicleSpeed  : 0|16@1+  (0.01,0)       [0|250]      "km/h" BusSim,ECU_TCU
+ SG_ WheelSpeedFL  : 16|16@1+ (0.01,0)       [0|250]      "km/h" BusSim
+ SG_ WheelSpeedFR  : 32|16@1+ (0.01,0)       [0|250]      "km/h" BusSim
+ SG_ WheelSpeedRL  : 48|8@1+  (1,0)          [0|250]      "km/h" BusSim
+ SG_ WheelSpeedRR  : 56|8@1+  (1,0)          [0|250]      "km/h" BusSim
+
+/* ── Transmission Control Unit – 20 ms ─────────────────────────────────── */
+BO_ 768 TransmissionData: 4 ECU_TCU
+ SG_ GearPosition      : 0|4@1+  (1,0)       [0|9]        ""     BusSim
+ SG_ SelectedGear      : 4|4@1+  (1,0)       [0|9]        ""     BusSim
+ SG_ TransmissionTemp  : 8|8@1+  (1,-40)     [-40|215]    "degC" BusSim
+ SG_ TransmissionMode  : 16|8@1+ (1,0)       [0|3]        ""     BusSim
+
+/* ── Battery Management System – 100 ms ─────────────────────────────────── */
+BO_ 1024 BatteryStatus: 8 ECU_BMS
+ SG_ BattVoltage      : 0|16@1+  (0.01,0)    [0|100]      "V"    BusSim,DiagTester
+ SG_ BattCurrent      : 16|16@1- (0.1,0)     [-3276.8|3276.7] "A" BusSim
+ SG_ BattSOC          : 32|8@1+  (0.392157,0)[0|100]      "%"    BusSim
+ SG_ BattTemp         : 40|8@1+  (1,-40)     [-40|85]     "degC" BusSim
+ SG_ BattCellVoltMax  : 48|8@1+  (0.02,0)    [0|5.1]      "V"    BusSim
+ SG_ BattCellVoltMin  : 56|8@1+  (0.02,0)    [0|5.1]      "V"    BusSim
+
+/* ── BusSim default test frame – configurable rate (default 10 Hz) ───────
+   Default payload DE AD BE EF 00 00 00 00 maps to:
+     Counter    = 0xDE (222)
+     TestValue  = 0xBEAD = 48813 → 4881.3 (raw demo value)
+     Flags      = 0xEF  (bit0=CANActive, bit1=ListenMode, bit2=Error, ...)
+     Temperature= 0x00  → -40 degC  (change with: SET DATA xx xx xx xx <temp+40> ...)
+     Voltage    = 0x00  →  0.0 V
+     Reserved   = 0x0000
+   Use "SET DATA" to put live values in bytes 4-7 during demo.            */
+BO_ 291 BusSimHeartbeat: 8 BusSim
+ SG_ Counter     : 0|8@1+  (1,0)        [0|255]   ""     Vector__XXX
+ SG_ TestValue   : 8|16@1+ (0.1,0)      [0|6553.5] ""    Vector__XXX
+ SG_ Flags       : 24|8@1+ (1,0)        [0|255]   ""     Vector__XXX
+ SG_ Temperature : 32|8@1+ (1,-40)      [-40|215] "degC" Vector__XXX
+ SG_ Voltage     : 40|8@1+ (0.1,0)      [0|25.5]  "V"    Vector__XXX
+ SG_ Reserved    : 48|16@1+ (1,0)       [0|65535] ""     Vector__XXX
+
+/* ── UDS functional request (ISO 14229-1) – event-driven ────────────────── */
+BO_ 2015 DiagRequest: 8 DiagTester
+ SG_ ServiceID      : 0|8@1+  (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ SubFunction    : 8|8@1+  (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ DataIdentifier : 16|16@1+ (1,0)    [0|65535] ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ RequestData_0  : 32|8@1+ (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ RequestData_1  : 40|8@1+ (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ RequestData_2  : 48|8@1+ (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+ SG_ RequestData_3  : 56|8@1+ (1,0)     [0|255]   ""     ECU_Engine,ECU_ABS,ECU_TCU,ECU_BMS
+
+/* ── Node comments ───────────────────────────────────────────────────────── */
+CM_ BU_ ECU_Engine  "Engine Control Unit";
+CM_ BU_ ECU_ABS     "Anti-lock Braking System controller";
+CM_ BU_ ECU_TCU     "Transmission Control Unit";
+CM_ BU_ ECU_BMS     "Battery Management System (high-voltage pack)";
+CM_ BU_ BusSim      "STM32F103C8T6 CAN+LIN Bus Simulator (CAN side) – this device";
+CM_ BU_ DiagTester  "Off-board UDS diagnostic tester";
+
+/* ── Message comments ────────────────────────────────────────────────────── */
+CM_ BO_ 256  "Engine operating data – 10 ms cyclic";
+CM_ BO_ 512  "Wheel speeds and derived vehicle speed – 10 ms cyclic";
+CM_ BO_ 768  "Transmission gear and temperature – 20 ms cyclic";
+CM_ BO_ 1024 "High-voltage battery pack status – 100 ms cyclic";
+CM_ BO_ 291  "BusSim periodic test frame (default ID 0x123). Configure with SET ID / SET DATA / SET RATE commands.";
+CM_ BO_ 2015 "UDS functional request broadcast to all ECUs (ISO 14229-1)";
+
+/* ── Signal comments ─────────────────────────────────────────────────────── */
+CM_ SG_ 256 RPM          "Engine crankshaft speed. Resolution 0.25 rpm/bit.";
+CM_ SG_ 256 CoolantTemp  "Engine coolant temperature. Offset -40 degC.";
+CM_ SG_ 256 EngineStatus "Bit0=EngineRunning Bit1=MIL Bit2=CruiseActive Bit3=ACRequest";
+CM_ SG_ 512 VehicleSpeed "Vehicle speed derived from four wheel sensors.";
+CM_ SG_ 768 GearPosition "Physical position of the gear lever.";
+CM_ SG_ 768 SelectedGear "Gear currently engaged by the TCU.";
+CM_ SG_ 768 TransmissionMode "Active drive programme.";
+CM_ SG_ 1024 BattCurrent "Positive = charging, negative = discharging.";
+CM_ SG_ 1024 BattSOC     "State of charge. Resolution 0.39 %/bit.";
+CM_ SG_ 291 Counter      "Increments 0-255 with every transmitted frame. Use to detect dropped frames.";
+CM_ SG_ 291 Flags        "Bit0=CANActive Bit1=ListenMode Bit2=TxError";
+
+/* ── Enumeration values ──────────────────────────────────────────────────── */
+VAL_ 768 GearPosition 0 "P" 1 "R" 2 "N" 3 "D" 4 "1st" 5 "2nd" 6 "3rd" 7 "4th" 8 "5th" 9 "6th";
+VAL_ 768 SelectedGear 0 "P" 1 "R" 2 "N" 3 "D" 4 "1st" 5 "2nd" 6 "3rd" 7 "4th" 8 "5th" 9 "6th";
+VAL_ 768 TransmissionMode 0 "Normal" 1 "Sport" 2 "Manual" 3 "Winter";
+
+/* ── Message cycle times (ms) ────────────────────────────────────────────── */
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
+BA_DEF_DEF_ "GenMsgCycleTime" 0;
+BA_ "GenMsgCycleTime" BO_ 256  10;
+BA_ "GenMsgCycleTime" BO_ 512  10;
+BA_ "GenMsgCycleTime" BO_ 768  20;
+BA_ "GenMsgCycleTime" BO_ 1024 100;
+BA_ "GenMsgCycleTime" BO_ 291  100;
+BA_ "GenMsgCycleTime" BO_ 2015 0;
+
+/* ── Send types ──────────────────────────────────────────────────────────── */
+BA_DEF_ BO_ "GenMsgSendType" ENUM "Cyclic" "Event" "NoMsgSendType";
+BA_DEF_DEF_ "GenMsgSendType" "Cyclic";
+BA_ "GenMsgSendType" BO_ 2015 "Event";
+
+</script>
+<script type="text/plain" id="default-ldf-data">
+/*
+ * LINSim_DUT_LIN.ldf — demo LDF for LINSim_DUT_LIN.ino, to verify the
+ * Arduino DUT's LIN *master* behavior (frames 0x10 and 0x20) with a LIN
+ * bus analyzer / "bus master" tool.
+ *
+ * Covers only the two IDs the Arduino drives as master:
+ *   0x10  Frame_Counter    — self-contained, Arduino publishes, 1 Hz
+ *   0x20  Frame_QuerySlave — Arduino sends the header, STM32_DUT (in
+ *                            `LIN MODE SLAVE` + `LIN RESP 0x20 ...`)
+ *                            publishes the response, 0.5 Hz
+ *
+ * 0x30 (Frame_AutoRespond) is deliberately NOT in the schedule table here.
+ * In that test the STM32 drives the header instead (`LIN MODE MASTER` +
+ * `LIN SEND 0x30`/`LIN ON`) and the Arduino only auto-answers passively —
+ * i.e. the bus's master role has swapped for that one ID. Its frame is
+ * still declared below so an analyzer can decode it if seen on the bus,
+ * but it's excluded from Arduino_DUT's own schedule table.
+ *
+ * ⚠ If your tool can actively master the bus (not just monitor/decode),
+ * keep it in passive/monitor mode while testing 0x10/0x20 — LIN is
+ * strictly single-master, and having both the Arduino and the tool drive
+ * headers at once is a protocol violation, not just noise (see
+ * CLAUDE.md's LIN architecture notes).
+ *
+ * Response length for 0x20 (3 bytes below) is arbitrary — the wire
+ * protocol carries no length field, so this must simply match whatever
+ * `LIN RESP 0x20 <bytes>` is currently configured on the STM32 (README
+ * example: `LIN RESP 0x20 AA BB CC`). Adjust Frame_QuerySlave's byte
+ * count/signals if you configure a different length.
+ */
+
+LIN_description_file;
+LIN_protocol_version = "2.1";
+LIN_language_version = "2.1";
+LIN_speed = 19.2 kbps;
+
+Nodes {
+    Master: Arduino_DUT, 5 ms, 0.1 ms;
+    Slaves: STM32_DUT;
+}
+
+Signals {
+    CounterByte0    : 8, 0,    Arduino_DUT, STM32_DUT;
+    QueryRespByte0  : 8, 0,    STM32_DUT, Arduino_DUT;
+    QueryRespByte1  : 8, 0,    STM32_DUT, Arduino_DUT;
+    QueryRespByte2  : 8, 0,    STM32_DUT, Arduino_DUT;
+    AutoRespCounter : 8, 0,    Arduino_DUT, STM32_DUT;
+    AutoRespFixed   : 8, 0xA5, Arduino_DUT, STM32_DUT;
+}
+
+Frames {
+    Frame_Counter: 0x10, Arduino_DUT, 1 {
+        CounterByte0, 0;
+    }
+    Frame_QuerySlave: 0x20, STM32_DUT, 3 {
+        QueryRespByte0, 0;
+        QueryRespByte1, 8;
+        QueryRespByte2, 16;
+    }
+    Frame_AutoRespond: 0x30, Arduino_DUT, 2 {
+        AutoRespCounter, 0;
+        AutoRespFixed, 8;
+    }
+}
+
+Node_attributes {
+    STM32_DUT {
+        LIN_protocol = "2.1";
+        configured_NAD = 0x01;
+        initial_NAD = 0x01;
+        product_id = 0x7FFF, 0x7FFF, 0;
+        P2_min = 50 ms;
+        ST_min = 0 ms;
+        configurable_frames {
+            Frame_QuerySlave;
+        }
+    }
+}
+
+/*
+ * Approximates the sketch's actual loop() timing (Frame_Counter every
+ * 1000 ms, Frame_QuerySlave every 2000 ms) via a repeating 2000 ms cycle —
+ * exact phase doesn't matter here since real timing comes from the
+ * Arduino's own millis()-based scheduler in LINSim_DUT_LIN.ino, not from
+ * a tool driving this table. Use this purely for frame/signal decode.
+ */
+Schedule_tables {
+    Master_Schedule {
+        Frame_Counter    delay 500 ms;
+        Frame_QuerySlave delay 500 ms;
+        Frame_Counter    delay 1000 ms;
+    }
+}
+</script>
 
 <script>
 'use strict';
@@ -443,6 +772,44 @@ function parseDBC(text) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// LDF PARSER (LIN Description File)
+// ══════════════════════════════════════════════════════════════════════
+const ldf = { frames: new Map(), signals: new Map() }; // id / name → object
+
+function parseLDF(text) {
+  ldf.frames.clear();
+  ldf.signals.clear();
+
+  // Strip block comments, same approach as the DBC parser
+  text = text.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Signals { Name : length, init, publisher, subscriber, ... ; ... }
+  for (const m of text.matchAll(/(\w+)\s*:\s*(\d+)\s*,\s*(0x[0-9A-Fa-f]+|\d+)\s*,\s*([\w,\s]+?)\s*;/g)) {
+    const [, name, length, init, rest] = m;
+    const nodes = rest.split(',').map(s => s.trim()).filter(Boolean);
+    ldf.signals.set(name, {
+      name,
+      length: +length,
+      init: init.startsWith('0x') ? parseInt(init, 16) : +init,
+      publisher: nodes[0] || '',
+      subscribers: nodes.slice(1),
+    });
+  }
+
+  // Frames { Name: id, publisher, length { SigName, bitOffset; ... } ... }
+  for (const m of text.matchAll(/(\w+)\s*:\s*(0x[0-9A-Fa-f]+|\d+)\s*,\s*(\w+)\s*,\s*(\d+)\s*\{([^}]*)\}/g)) {
+    const [, name, idTok, publisher, lenTok, body] = m;
+    const id = idTok.toLowerCase().startsWith('0x') ? parseInt(idTok, 16) : parseInt(idTok, 10);
+    const signals = [];
+    for (const sm of body.matchAll(/(\w+)\s*,\s*(\d+)\s*;/g)) {
+      const sigDef = ldf.signals.get(sm[1]);
+      signals.push({ name: sm[1], bitOffset: +sm[2], length: sigDef ? sigDef.length : null });
+    }
+    ldf.frames.set(id, { id, name, publisher, length: +lenTok, signals });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // SIGNAL DECODE / ENCODE
 // ══════════════════════════════════════════════════════════════════════
 function extractIntel(bytes, startBit, length, signed) {
@@ -503,12 +870,20 @@ function encodeSignalIntoBytes(bytes, sig, physVal) {
 // FRAME PARSER (BusSim output format)
 // ══════════════════════════════════════════════════════════════════════
 function parseFrame(line) {
-  // TX  ID:0x123  DLC:8  DATA: DE AD BE EF 00 00 00 00
-  // RX  ID:0x7DF  DLC:8  DATA: 02 10 03 AA BB CC DD EE
+  // LIN: LIN TX  ID:0x10  DATA: 01 02 03           (no DLC on the wire — LIN has none)
+  // LIN: LIN RX  ID:0x10  DATA: 01 02 03
+  const mLin = line.match(/^LIN\s+(TX|RX)\s+ID:0x([0-9A-Fa-f]+)\s+DATA:\s*((?:[0-9A-Fa-f]{2}\s*)*)/i);
+  if (mLin) {
+    const hex = mLin[3].trim();
+    const data = hex ? new Uint8Array(hex.split(/\s+/).map(h => parseInt(h, 16))) : new Uint8Array(0);
+    return { bus: 'LIN', dir: mLin[1].toUpperCase(), id: parseInt(mLin[2], 16), dlc: data.length, data };
+  }
+  // CAN: TX  ID:0x123  DLC:8  DATA: DE AD BE EF 00 00 00 00
+  // CAN: RX  ID:0x7DF  DLC:8  DATA: 02 10 03 AA BB CC DD EE
   const m = line.match(/(TX|RX)\s+ID:0x([0-9A-Fa-f]+)\s+DLC:(\d+)\s+DATA:\s*((?:[0-9A-Fa-f]{2}\s*)+)/i);
   if (!m) return null;
   const data = new Uint8Array(m[4].trim().split(/\s+/).map(h => parseInt(h, 16)));
-  return { dir: m[1].toUpperCase(), id: parseInt(m[2], 16), dlc: +m[3], data };
+  return { bus: 'CAN', dir: m[1].toUpperCase(), id: parseInt(m[2], 16), dlc: +m[3], data };
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -627,7 +1002,7 @@ function setConnUI(connected) {
 // ══════════════════════════════════════════════════════════════════════
 // TRAFFIC TABLE
 // ══════════════════════════════════════════════════════════════════════
-const lastRows = new Map();   // "id_DIR" → <tr> element
+const lastRows = new Map();   // "BUS_id_DIR" → <tr> element
 const allFrames = [];
 let totalFrames = 0;
 let expandedRow = null;
@@ -638,8 +1013,33 @@ function dirBadge(dir) {
     : '<span class="dir-rx">RX</span>';
 }
 
+function busBadge(bus) {
+  return bus === 'LIN'
+    ? '<span class="bus-lin">LIN</span>'
+    : '<span class="bus-can">CAN</span>';
+}
+
+// Returns a DBC-shaped {name, signals} for either bus, or null if the frame
+// isn't in the loaded database. LIN's bit numbering (LSB-first within the
+// frame, byte 0 first) matches DBC's Intel byte order, so LDF signals decode
+// correctly through the same decodeSignal()/extractIntel() used for CAN —
+// just without factor/offset/unit scaling, which LDF doesn't define here.
+function lookupMsg(bus, id) {
+  if (bus === 'CAN') return dbc.messages.get(id) || null;
+  const frame = ldf.frames.get(id);
+  if (!frame) return null;
+  return {
+    name: frame.name,
+    signals: frame.signals.map(s => ({
+      name: s.name, startBit: s.bitOffset, length: s.length || 8,
+      intel: true, signed: false, factor: 1, offset: 0, unit: '', valDesc: null,
+    })),
+  };
+}
+
 function addTrafficFrame(frame) {
   const dir = frame.dir || 'RX';
+  const bus = frame.bus || 'CAN';
   const now = new Date();
   const ts = now.toTimeString().slice(0,8) + '.' + String(now.getMilliseconds()).padStart(3,'0');
   totalFrames++;
@@ -647,10 +1047,12 @@ function addTrafficFrame(frame) {
 
   const lastVal = document.getElementById('last-val-mode').checked;
   const filter  = document.getElementById('id-filter').value.trim().toLowerCase();
-  const idHex   = frame.id.toString(16).toUpperCase().padStart(3,'0');
+  const idHex   = frame.id.toString(16).toUpperCase().padStart(bus === 'LIN' ? 2 : 3, '0');
   const filterMatch = !filter || ('0x'+idHex).includes(filter) || idHex.toLowerCase().includes(filter.replace('0x',''));
 
-  const msg = dbc.messages.get(frame.id);
+  // Bus-scoped lookup — CAN/LIN IDs can numerically overlap, so this must
+  // never fall back to searching the other bus's database.
+  const msg = lookupMsg(bus, frame.id);
   const name = msg ? msg.name : '—';
   const dataHex = Array.from(frame.data).map(b => b.toString(16).toUpperCase().padStart(2,'0')).join(' ');
 
@@ -663,7 +1065,7 @@ function addTrafficFrame(frame) {
   }
 
   function makeDetail(list) {
-    if (!list.length) return '<span style="color:var(--muted)">No signals in DBC for this ID.</span>';
+    if (!list.length) return '<span style="color:var(--muted)">No signals for this ID.</span>';
     return '<div class="sig-grid">' + list.map(d =>
       `<div class="sig-box">
         <div class="sn">${d.sig.name}</div>
@@ -673,22 +1075,23 @@ function addTrafficFrame(frame) {
     ).join('') + '</div>';
   }
 
-  // Last Value mode keys by "id_DIR" so TX and RX for the same ID get separate rows
-  const rowKey = `${frame.id}_${dir}`;
+  // Last Value mode keys by "BUS_id_DIR" so CAN and LIN never collide even
+  // when their IDs numerically overlap (e.g. CAN 0x10 vs LIN 0x10).
+  const rowKey = `${bus}_${frame.id}_${dir}`;
 
   if (lastVal) {
-    // ── Last Value mode: one row per ID+direction, updated in place ────
+    // ── Last Value mode: one row per bus+ID+direction, updated in place ────
     if (lastRows.has(rowKey)) {
       const tr = lastRows.get(rowKey);
       if (!filterMatch) { tr.style.display = 'none'; return; }
       tr.style.display = '';
-      // cells: [0]=time [1]=dir [2]=count [3]=ID [4]=name [5]=DLC [6]=data [7]=signals
+      // cells: [0]=time [1]=bus [2]=dir [3]=count [4]=ID [5]=name [6]=DLC [7]=data [8]=signals
       const cells = tr.cells;
       cells[0].textContent = ts;
-      cells[2].textContent = parseInt(cells[2].textContent || '0') + 1;
-      cells[5].textContent = frame.dlc;
-      cells[6].textContent = dataHex;
-      cells[7].innerHTML   = makeChips(decoded);
+      cells[3].textContent = parseInt(cells[3].textContent || '0') + 1;
+      cells[6].textContent = frame.dlc;
+      cells[7].textContent = dataHex;
+      cells[8].innerHTML   = makeChips(decoded);
       tr.dataset.canData = Array.from(frame.data).map(b => b.toString(16).padStart(2,'0')).join('');
       const now2 = Date.now();
       if (!tr._lastFlash || now2 - tr._lastFlash > 400) {
@@ -705,9 +1108,11 @@ function addTrafficFrame(frame) {
       if (!filterMatch) return;
       const tr = document.createElement('tr');
       tr.dataset.canId   = frame.id;
+      tr.dataset.canBus  = bus;
       tr.dataset.canData = Array.from(frame.data).map(b => b.toString(16).padStart(2,'0')).join('');
       tr.innerHTML =
         `<td class="mono">${ts}</td>` +
+        `<td style="text-align:center">${busBadge(bus)}</td>` +
         `<td style="text-align:center">${dirBadge(dir)}</td>` +
         `<td class="mono" style="color:var(--muted);text-align:right">1</td>` +
         `<td class="id-cell ${msg ? 'id-known' : 'id-unknown'}">0x${idHex}</td>` +
@@ -720,7 +1125,7 @@ function addTrafficFrame(frame) {
       lastRows.set(rowKey, tr);
       const dtr = document.createElement('tr');
       dtr.className = 'sig-detail';
-      dtr.innerHTML = `<td colspan="8" style="padding:0"></td>`;
+      dtr.innerHTML = `<td colspan="9" style="padding:0"></td>`;
       tbody().appendChild(tr);
       tbody().appendChild(dtr);
       document.getElementById('no-traffic').style.display = 'none';
@@ -730,9 +1135,11 @@ function addTrafficFrame(frame) {
     if (!filterMatch) return;
     const tr = document.createElement('tr');
     tr.dataset.canId   = frame.id;
+    tr.dataset.canBus  = bus;
     tr.dataset.canData = Array.from(frame.data).map(b => b.toString(16).padStart(2,'0')).join('');
     tr.innerHTML =
       `<td class="mono">${ts}</td>` +
+      `<td style="text-align:center">${busBadge(bus)}</td>` +
       `<td style="text-align:center">${dirBadge(dir)}</td>` +
       `<td class="mono" style="color:var(--muted);text-align:right">—</td>` +
       `<td class="id-cell ${msg ? 'id-known' : 'id-unknown'}">0x${idHex}</td>` +
@@ -743,7 +1150,7 @@ function addTrafficFrame(frame) {
     tr.addEventListener('click', () => toggleDetail(tr));
     const dtr = document.createElement('tr');
     dtr.className = 'sig-detail';
-    dtr.innerHTML = `<td colspan="8" style="padding:0"></td>`;
+    dtr.innerHTML = `<td colspan="9" style="padding:0"></td>`;
     const b = tbody();
     b.appendChild(tr);
     b.appendChild(dtr);
@@ -766,10 +1173,11 @@ function toggleDetail(tr) {
   if (isOpen) {
     dtr.classList.remove('show'); tr.classList.remove('expanded'); expandedRow = null;
   } else {
-    const msgId  = parseInt(tr.dataset.canId);
-    const hexStr = tr.dataset.canData || '';
-    const bytes  = new Uint8Array(hexStr.match(/.{2}/g)?.map(h => parseInt(h, 16)) || []);
-    const signals = dbc.messages.get(msgId)?.signals || [];
+    const msgId   = parseInt(tr.dataset.canId);
+    const busType = tr.dataset.canBus || 'CAN';
+    const hexStr  = tr.dataset.canData || '';
+    const bytes   = new Uint8Array(hexStr.match(/.{2}/g)?.map(h => parseInt(h, 16)) || []);
+    const signals = lookupMsg(busType, msgId)?.signals || [];
     const vals = signals.map(s => ({ sig: s, val: decodeSignal(bytes, s) }));
     dtr.querySelector('td').innerHTML = vals.length
       ? '<div class="sig-grid" style="padding:8px">' + vals.map(d =>
@@ -778,7 +1186,7 @@ function toggleDetail(tr) {
             <div class="sv">${d.val.str}</div>
             <div class="sr">raw=0x${d.val.raw.toString(16).toUpperCase()}  bits[${d.sig.startBit}..${d.sig.startBit+d.sig.length-1}]  factor=${d.sig.factor}  offset=${d.sig.offset}</div>
            </div>`).join('') + '</div>'
-      : '<div style="padding:10px;color:var(--muted)">No DBC signals for this message.</div>';
+      : `<div style="padding:10px;color:var(--muted)">${busType === 'LIN' ? 'No LDF loaded, or no signals for this ID.' : 'No DBC loaded, or no signals for this message.'}</div>`;
     dtr.classList.add('show'); tr.classList.add('expanded'); expandedRow = tr;
   }
 }
@@ -798,9 +1206,10 @@ function clearTraffic() {
 function applyFilter() {
   if (!document.getElementById('last-val-mode').checked) return;
   const filter = document.getElementById('id-filter').value.trim().toLowerCase();
-  for (const [id, tr] of lastRows) {
-    const idHex = id.toString(16).padStart(3,'0');
-    const show = !filter || ('0x'+idHex).includes(filter) || idHex.includes(filter.replace('0x',''));
+  for (const tr of lastRows.values()) {
+    const bus   = tr.dataset.canBus || 'CAN';
+    const idHex = parseInt(tr.dataset.canId, 10).toString(16).padStart(bus === 'LIN' ? 2 : 3, '0');
+    const show = !filter || ('0x'+idHex).includes(filter) || idHex.toLowerCase().includes(filter.replace('0x',''));
     tr.style.display = show ? '' : 'none';
     if (tr.nextSibling && tr.nextSibling.classList.contains('sig-detail'))
       tr.nextSibling.style.display = show ? '' : 'none';
@@ -834,13 +1243,18 @@ async function sendConsoleCmd() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// TRANSMIT – MANUAL
+// TRANSMIT – MANUAL (shared byte-input helper for CAN and LIN panels)
 // ══════════════════════════════════════════════════════════════════════
 let canActive = false;
+let linActive = false;
 
-function syncDlcBytes() {
-  const dlc = Math.max(1, Math.min(8, +document.getElementById('tx-dlc').value || 8));
-  const container = document.getElementById('data-bytes');
+// CAN and LIN each have their own byte-input group (#data-bytes / #lin-data-bytes)
+// sharing the .byte-input class for styling — always scope queries to the
+// container, never `document.querySelectorAll('.byte-input')` globally, or
+// the two panels' fields would read/write each other's bytes.
+function syncBytes(dlcId, containerId) {
+  const dlc = Math.max(1, Math.min(8, +document.getElementById(dlcId).value || 8));
+  const container = document.getElementById(containerId);
   const existing = container.querySelectorAll('.byte-input');
   if (existing.length === dlc) return;
   container.innerHTML = '';
@@ -857,11 +1271,14 @@ function syncDlcBytes() {
   }
 }
 
+function syncDlcBytes()    { syncBytes('tx-dlc', 'data-bytes'); }
+function syncLinDlcBytes() { syncBytes('lin-tx-dlc', 'lin-data-bytes'); }
+
 async function configureTX() {
   const id = document.getElementById('tx-id').value.trim();
   const dlc = document.getElementById('tx-dlc').value;
   const rate = document.getElementById('tx-rate').value;
-  const bytes = Array.from(document.querySelectorAll('.byte-input')).map(i => i.value.padStart(2,'0')).join(' ');
+  const bytes = Array.from(document.querySelectorAll('#data-bytes .byte-input')).map(i => i.value.padStart(2,'0')).join(' ');
   await serialWrite(`SET ID ${id}`);
   await delay(50);
   await serialWrite(`SET DLC ${dlc}`);
@@ -877,7 +1294,7 @@ async function canOff() { await serialWrite('CAN OFF'); canActive = false; updat
 function updateCanBadge() {
   const b = document.getElementById('can-state-badge');
   b.textContent = canActive ? 'ON' : 'OFF';
-  b.className = canActive ? 'on' : '';
+  b.className = canActive ? 'state-badge on' : 'state-badge';
   // Grey out the button matching the current state; enable the opposite
   ['tx-on-btn', 'dbc-tx-on-btn'].forEach(id => {
     const el = document.getElementById(id);
@@ -890,6 +1307,57 @@ function updateCanBadge() {
 }
 
 const delay = ms => new Promise(r => setTimeout(r, ms));
+
+// ══════════════════════════════════════════════════════════════════════
+// TRANSMIT – LIN
+// ══════════════════════════════════════════════════════════════════════
+async function linSetMode() {
+  const mode = document.getElementById('lin-mode-select').value;
+  await serialWrite(`LIN MODE ${mode}`);
+}
+
+async function configureLinTX() {
+  const id = document.getElementById('lin-tx-id').value.trim();
+  const dlc = document.getElementById('lin-tx-dlc').value;
+  const rate = document.getElementById('lin-tx-rate').value;
+  const bytes = Array.from(document.querySelectorAll('#lin-data-bytes .byte-input')).map(i => i.value.padStart(2,'0')).join(' ');
+  await serialWrite(`SET LINID ${id}`);
+  await delay(50);
+  await serialWrite(`SET LINDLC ${dlc}`);
+  await delay(50);
+  await serialWrite(`SET LINDATA ${bytes}`);
+  await delay(50);
+  await serialWrite(`SET LINRATE ${rate}`);
+}
+
+async function linSendOnce() {
+  const id = document.getElementById('lin-tx-id').value.trim();
+  const bytes = Array.from(document.querySelectorAll('#lin-data-bytes .byte-input')).map(i => i.value.padStart(2,'0')).join(' ');
+  await serialWrite(`LIN SEND ${id} ${bytes}`);
+}
+
+async function linOn()  { await serialWrite('LIN ON');  linActive = true;  updateLinBadge(); }
+async function linOff() { await serialWrite('LIN OFF'); linActive = false; updateLinBadge(); }
+
+function updateLinBadge() {
+  const b = document.getElementById('lin-state-badge');
+  b.textContent = linActive ? 'ON' : 'OFF';
+  b.className = linActive ? 'state-badge on' : 'state-badge';
+  document.getElementById('lin-tx-on-btn').disabled  = linActive;
+  document.getElementById('lin-tx-off-btn').disabled = !linActive;
+}
+
+async function registerLinResp() {
+  const id = document.getElementById('lin-resp-id').value.trim();
+  const bytes = document.getElementById('lin-resp-data').value.trim();
+  if (!bytes) return;
+  await serialWrite(`LIN RESP ${id} ${bytes}`);
+}
+
+async function clearLinResp() {
+  const id = document.getElementById('lin-resp-id').value.trim();
+  await serialWrite(`LIN RESP CLEAR ${id}`);
+}
 
 // ══════════════════════════════════════════════════════════════════════
 // TRANSMIT – DBC GUIDED
@@ -949,7 +1417,7 @@ function recalcDbcData() {
   document.getElementById('tx-id').value = id.toString(16).toUpperCase();
   document.getElementById('tx-dlc').value = msg.dlc;
   syncDlcBytes();
-  const byteInputs = document.querySelectorAll('.byte-input');
+  const byteInputs = document.querySelectorAll('#data-bytes .byte-input');
   bytes.forEach((b, i) => { if (byteInputs[i]) byteInputs[i].value = b.toString(16).toUpperCase().padStart(2,'0'); });
 }
 
@@ -1000,6 +1468,35 @@ function buildSidebar() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// LDF SIDEBAR
+// ══════════════════════════════════════════════════════════════════════
+function buildLinSidebar() {
+  const list = document.getElementById('lin-msg-list');
+  list.innerHTML = '';
+  if (!ldf.frames.size) {
+    list.innerHTML = '<div class="no-data">No frames</div>';
+    return;
+  }
+  for (const [id, frame] of ldf.frames) {
+    const div = document.createElement('div');
+    div.className = 'msg-item';
+    div.dataset.id = id;
+    div.innerHTML = `<div class="msg-hdr">
+        <span class="caret">&#9658;</span>
+        <span>${frame.name}</span>
+        <span class="msg-id">0x${id.toString(16).toUpperCase().padStart(2,'0')}</span>
+      </div>
+      <div class="msg-signals">${frame.signals.map(s =>
+        `<div class="sig-entry">${s.name}${s.length != null ? ' ['+s.length+' bit]' : ''}</div>`
+      ).join('')}</div>`;
+    div.querySelector('.msg-hdr').addEventListener('click', () => {
+      div.classList.toggle('open');
+    });
+    list.appendChild(div);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // DBC FILE LOAD
 // ══════════════════════════════════════════════════════════════════════
 document.getElementById('dbc-file').addEventListener('change', e => {
@@ -1012,12 +1509,36 @@ document.getElementById('dbc-file').addEventListener('change', e => {
       const count = dbc.messages.size;
       const status = document.getElementById('dbc-status');
       status.textContent = `${file.name}  (${count} messages)`;
-      status.className = 'loaded';
+      status.className = 'db-status loaded';
       buildSidebar();
       buildDBCTxPanel();
       addConsole(`[DBC] Loaded "${file.name}" – ${count} messages`, 'sys');
     } catch (err) {
       addConsole('[DBC] Parse error: ' + err.message, 'err');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// LDF FILE LOAD
+// ══════════════════════════════════════════════════════════════════════
+document.getElementById('ldf-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      parseLDF(ev.target.result);
+      const count = ldf.frames.size;
+      const status = document.getElementById('ldf-status');
+      status.textContent = `${file.name}  (${count} frames)`;
+      status.className = 'db-status loaded';
+      buildLinSidebar();
+      addConsole(`[LDF] Loaded "${file.name}" – ${count} frames`, 'sys');
+    } catch (err) {
+      addConsole('[LDF] Parse error: ' + err.message, 'err');
     }
     e.target.value = '';
   };
@@ -1033,11 +1554,43 @@ function switchTab(name) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// DEFAULT DATABASE AUTO-LOAD
+// ══════════════════════════════════════════════════════════════════════
+// Reads from the inert <script type="text/plain"> blocks embedded in the
+// HTML (see just before the main <script> tag) rather than fetch()-ing the
+// sibling .dbc/.ldf files — fetch() to a local file is blocked by CORS in
+// Chrome/Edge when this page itself is opened via file:// (double-clicked),
+// which is this file's normal, server-less usage per the README. Embedding
+// avoids that entirely. The Database tab's Load DBC/Load LDF buttons still
+// work as before to switch to a different file afterwards.
+function loadEmbeddedDefault(kind, elId, filename, parseFn, statusId, countOf, label, onLoaded) {
+  const el = document.getElementById(elId);
+  if (!el || !el.textContent.trim()) return;
+  try {
+    parseFn(el.textContent);
+    const count = countOf();
+    const status = document.getElementById(statusId);
+    status.textContent = `${filename}  (${count} ${label})`;
+    status.className = 'db-status loaded';
+    if (onLoaded) onLoaded();
+    addConsole(`[${kind}] Loaded default "${filename}" – ${count} ${label}`, 'sys');
+  } catch (e) {
+    addConsole(`[${kind}] Failed to parse embedded default "${filename}": ${e.message}`, 'err');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════════════
 syncDlcBytes();
+syncLinDlcBytes();
 addConsole('BusSim Web UI ready. Load a DBC file then click Connect.', 'sys');
 addConsole('Requires Chrome or Edge (Web Serial API).', 'sys');
+
+loadEmbeddedDefault('DBC', 'default-dbc-data', 'CANSim_DUT.dbc', parseDBC, 'dbc-status',
+  () => dbc.messages.size, 'messages', () => { buildSidebar(); buildDBCTxPanel(); });
+loadEmbeddedDefault('LDF', 'default-ldf-data', 'LINSim_DUT.ldf', parseLDF, 'ldf-status',
+  () => ldf.frames.size, 'frames', () => { buildLinSidebar(); });
 </script>
 </body>
 </html>
