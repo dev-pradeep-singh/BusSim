@@ -1,38 +1,40 @@
 /*
  * LINSim_DUT_LIN — Arduino Nano + LINTTL3
- * LIN bus test harness for the BusSim Blue Pill's LIN side (lin_handler.c)
+ * LIN bus test harness for the BusSim Blue Pill's LIN side (lin_handler.c) —
+ * simulates a 4-door / 4-window body-control slave module.
  *
- * What this sketch does (minimal test harness, not a full simulated network)
+ * Roles (Arduino_DUT is the LIN *master*, same as the original harness;
+ * STM32_DUT stays in its default LIN_MODE_SLAVE the whole time — no
+ * `LIN MODE MASTER` needed for this test)
  * ────────────────────────────────────────────────────────────────────────
- *  • Drives a LIN master schedule for two test IDs:
- *      0x10  master-response frame, ~1 Hz, incrementing counter byte
- *            (self-contained — proves header+data generation works even
- *            with no other node on the bus)
- *      0x20  header-only frame, ~0.5 Hz — sent, then this sketch listens
- *            for a response with a short timeout. Use this to exercise
- *            the STM32 in SLAVE mode (its default boot mode — see
- *            CLAUDE.md — so LIN MODE SLAVE below is a no-op unless the
- *            STM32 was previously switched to MASTER):
- *              STM32> LIN MODE SLAVE
- *              STM32> LIN RESP 0x20 <bytes...>
- *            A valid response here proves the STM32 slave-response path.
- *            The response byte count must match what a listening bus
- *            analyzer expects (e.g. an LDF's declared frame length) or it
- *            may log a decode error even though the STM32 responded fine —
- *            see LINSim_DUT_LIN.ldf.
- *  • Passively watches the bus for a header on 0x30 that this sketch isn't
- *    itself driving, and auto-answers it with a fixed 2-byte payload (an
- *    incrementing byte + 0xA5). Use this to exercise the STM32 in MASTER
- *    mode:
- *              STM32> LIN MODE MASTER
- *              STM32> SET LINID 0x30
- *              STM32> LIN SEND 0x30 01 02          (or LIN ON)
- *            The STM32's own `LISTEN ON` output shows this sketch's reply.
+ *  • Drives a LIN master schedule for two frames (see LINSim_DUT.ldf for
+ *    the full byte layout):
  *
- *  LIN is strictly single-master — never have the STM32 in MASTER mode
- *  driving its own periodic schedule (or `LIN SEND`) for 0x10/0x20 at the
- *  same time this sketch is also driving them. The 0x30 auto-responder
- *  path is the only one meant to run concurrently with the STM32 sending.
+ *      0x10  Frame_DoorWindowStatus — self-contained, ~1 Hz. This sketch
+ *            publishes its own simulated status: current door lock bitmask,
+ *            the four windows' *live* positions (0-100%, animated toward
+ *            their commanded targets over a few seconds — not instant, to
+ *            model a real window motor), and a moving-status bitmask.
+ *            `LISTEN ON` on the STM32 is enough to see it decoded; no
+ *            STM32 action needed.
+ *
+ *      0x20  Frame_DoorWindowCmd — header-only, ~0.5 Hz; this is how you
+ *            *set* signals from the STM32 side. Register a response on the
+ *            STM32 CLI:
+ *              STM32> LIN RESP 0x20 <lockBits> <winFL> <winFR> <winRL> <winRR>
+ *            e.g. `LIN RESP 0x20 03 64 00 64 00` locks FL+FR (bits 0,1),
+ *            commands FL/RL windows to 100% (closed) and FR/RR to 0% (open).
+ *            This sketch reads that response on its next poll and applies
+ *            it — door locks update instantly, window targets are picked up
+ *            by the motion simulation in loop(). Re-issue `LIN RESP 0x20 ...`
+ *            any time to change the command.
+ *
+ *  Unlike the original version of this sketch, there's no passive
+ *  auto-responder path anymore (the old 0x30 test, which exercised the
+ *  STM32 in LIN MODE MASTER) — STM32_DUT never needs to drive anything for
+ *  this scenario, so that whole RX state machine and its single-master
+ *  bus-contention caveats go away. If you want that STM32-masters-a-frame
+ *  test back, 0x30 is free/unused here; see git history for the old sketch.
  *
  * Protocol implementation
  * ────────────────────────
@@ -63,7 +65,7 @@
  *  table below. This mirrors BusSim's own PB8/PB9-vs-USB pin-conflict story,
  *  just on the Arduino side.
  *
- * Wiring — Arduino Nano ↔ LINTTL3 module
+ * Wiring — Arduino Nano ↔ LINTTL3 module (unchanged from the original harness)
  * ───────────────────────────────────────
  *   LINTTL3   Arduino Nano
  *   TX     →  D0 (RX)             module's TTL output into the Nano's UART RX
@@ -81,17 +83,17 @@
  * LIN bus wiring
  * ──────────────
  *   LINTTL3 LIN pin  ←→  MCP2004 LBUS pin (STM32 side), same bus wire
- *   Master pull-up (1 kΩ + diode, LIN pin → VIN) needed on whichever node
- *   is acting as master for a given test — only one at a time in practice
- *   for this minimal harness, since only one master drives per test.
+ *   Master pull-up (1 kΩ + diode, LIN pin → VIN) needed here since this
+ *   sketch is the bus master for this scenario.
  *
  * Status LED (D13, onboard) — blink patterns
  * ───────────────────────────────────────────
- *   1 short blink   (30 ms)            — this sketch sent a frame (0x10/0x20/0x30 header)
- *   2 blinks        (80/80 ms)         — valid response received for 0x20 (good checksum)
- *   3 blinks        (60/60 ms)         — auto-responded to a 0x30 header from the STM32
- *   4 fast blinks   (40/40 ms)         — response received but checksum failed
- *   1 long blink    (400 ms)           — 0x20 query timed out, no response seen
+ *   1 short blink   (30 ms)            — Frame_DoorWindowStatus sent
+ *   2 blinks        (80/80 ms)         — valid Frame_DoorWindowCmd response received & applied
+ *   4 fast blinks   (40/40 ms)         — command response received but checksum failed
+ *   1 long blink    (400 ms)           — command poll timed out, no response seen
+ *                                         (no `LIN RESP 0x20 ...` registered on the STM32 yet,
+ *                                          or it's not connected/powered)
  */
 
 #include <string.h>
@@ -105,12 +107,22 @@
 static const uint32_t LIN_BAUD           = 19200UL;
 static const uint16_t LIN_BREAK_US       = 750;   // >13 bit times at 19200 (677us) + margin
 static const uint16_t LIN_BREAK_DELIM_US = 60;    // ~1 bit time high before sync
-static const uint32_t QUERY_TIMEOUT_MS   = 20;    // response wait for 0x20
+static const uint32_t QUERY_TIMEOUT_MS   = 20;    // response wait for Frame_DoorWindowCmd
 
-// ── Test IDs ─────────────────────────────────────────────────────────────
-static const uint8_t ID_COUNTER      = 0x10;  // self-contained master-response frame
-static const uint8_t ID_QUERY_SLAVE  = 0x20;  // exercises STM32 SLAVE mode
-static const uint8_t ID_AUTO_RESPOND = 0x30;  // exercises STM32 MASTER mode
+// ── Frame IDs ────────────────────────────────────────────────────────────
+static const uint8_t ID_STATUS = 0x10;  // Frame_DoorWindowStatus — self-published by this sketch
+static const uint8_t ID_CMD    = 0x20;  // Frame_DoorWindowCmd — STM32 answers via LIN RESP
+
+// ── Door/window simulation ──────────────────────────────────────────────
+#define WINDOW_COUNT       4   // FL, FR, RL, RR (index order used throughout)
+#define CMD_RESP_LEN       5   // DoorLockCmd + 4 window targets
+#define STATUS_LEN         6   // DoorLockStatus + 4 window positions + moving bitmask
+#define WINDOW_STEP_PCT    2   // position change per motion tick (simulated motor speed)
+#define WINDOW_TICK_MS     100 // motion update interval -> ~0-100% sweep in ~5 s
+
+static uint8_t doorLockBitmask = 0;              // last successfully commanded lock state (bit0=FL..bit3=RR)
+static uint8_t winTarget[WINDOW_COUNT] = {0,0,0,0}; // commanded target position, 0-100 (0=open, 100=closed)
+static uint8_t winPos[WINDOW_COUNT]    = {0,0,0,0}; // live/animating actual position, 0-100
 
 // Declared ahead of all function definitions — the Arduino IDE's
 // auto-generated function prototypes get inserted as a block right before
@@ -186,7 +198,7 @@ static void linSendFrame(uint8_t id, const uint8_t *data, uint8_t len)
 }
 
 // Drain whatever the transceiver echoes back from our own transmission
-// before resuming the passive auto-responder listener.
+// before the next loop() iteration.
 static void linDrainEcho()
 {
     delay(2);
@@ -224,21 +236,6 @@ static LinReadResult linReadResponse(uint8_t id, uint8_t *data, uint8_t *len, ui
     return LIN_READ_OK;
 }
 
-// ── Passive RX state machine (auto-responder for ID_AUTO_RESPOND) ──────
-// Break is detected the same way lin_handler.c does: a framing error (FE0)
-// paired with a received 0x00 byte.
-enum LinRxState { RX_IDLE, RX_SYNC, RX_PID };
-static LinRxState rxState = RX_IDLE;
-static uint8_t    autoRespCounter = 0;
-
-static bool linRxByte(uint8_t &byte, bool &frameErr)
-{
-    if (!(UCSR0A & _BV(RXC0))) return false;
-    frameErr = (UCSR0A & _BV(FE0)) != 0;
-    byte = UDR0;   // read clears RXC0/FE0
-    return true;
-}
-
 static void blinkPattern(uint8_t count, uint16_t onMs, uint16_t offMs)
 {
     for (uint8_t i = 0; i < count; i++)
@@ -250,48 +247,56 @@ static void blinkPattern(uint8_t count, uint16_t onMs, uint16_t offMs)
     }
 }
 
-static void linPollAutoResponder()
+// ── Door/window simulation ──────────────────────────────────────────────
+// Applies a Frame_DoorWindowCmd response: door locks take effect instantly
+// (no physical motor to animate), window targets are picked up by
+// updateWindowMotion() on subsequent ticks.
+static void applyCmdResponse(const uint8_t *data)
 {
-    uint8_t b;
-    bool    fe;
-
-    while (linRxByte(b, fe))
+    doorLockBitmask = data[0];
+    for (uint8_t i = 0; i < WINDOW_COUNT; i++)
     {
-        if (fe && b == 0x00) { rxState = RX_SYNC; continue; }
-
-        switch (rxState)
-        {
-        case RX_SYNC:
-            rxState = (b == 0x55) ? RX_PID : RX_IDLE;
-            break;
-
-        case RX_PID:
-        {
-            uint8_t id = b & 0x3F;
-            rxState = RX_IDLE;
-            if (id == ID_AUTO_RESPOND)
-            {
-                uint8_t data[2] = { autoRespCounter++, 0xA5 };
-                uint8_t chk = linChecksum(b, data, sizeof(data));
-                Serial.write(data, sizeof(data));
-                Serial.write(chk);
-                Serial.flush();
-                linDrainEcho();
-                blinkPattern(3, 60, 60);
-            }
-            break;
-        }
-
-        default:
-            break;
-        }
+        uint8_t t = data[1 + i];
+        winTarget[i] = (t > 100) ? 100 : t;   // clamp to a valid percentage
     }
 }
 
+// Steps each window's live position toward its commanded target by
+// WINDOW_STEP_PCT per WINDOW_TICK_MS, modeling a real window motor's finite
+// travel time rather than an instant jump.
+static void updateWindowMotion()
+{
+    static uint32_t tMotion = 0;
+    uint32_t now = millis();
+    if (now - tMotion < WINDOW_TICK_MS) return;
+    tMotion = now;
+
+    for (uint8_t i = 0; i < WINDOW_COUNT; i++)
+    {
+        int16_t pos = winPos[i];
+        int16_t tgt = winTarget[i];
+        if (pos < tgt)      pos = min((int16_t)(pos + WINDOW_STEP_PCT), tgt);
+        else if (pos > tgt) pos = max((int16_t)(pos - WINDOW_STEP_PCT), tgt);
+        winPos[i] = (uint8_t)pos;
+    }
+}
+
+// Builds the Frame_DoorWindowStatus payload from current simulated state.
+static void buildStatusFrame(uint8_t *out)
+{
+    out[0] = doorLockBitmask;
+    uint8_t moving = 0;
+    for (uint8_t i = 0; i < WINDOW_COUNT; i++)
+    {
+        out[1 + i] = winPos[i];
+        if (winPos[i] != winTarget[i]) moving |= (uint8_t)(1 << i);
+    }
+    out[5] = moving;
+}
+
 // ── Timing ────────────────────────────────────────────────────────────
-static uint32_t tCounter = 0;
-static uint32_t tQuery   = 0;
-static uint8_t  counterByte = 0;
+static uint32_t tStatus = 0;
+static uint32_t tCmd    = 0;
 
 void setup()
 {
@@ -302,6 +307,7 @@ void setup()
     Serial.begin(115200);
     delay(500);   // window to have Serial Monitor already open at reset
     Serial.println(F("LINSim_DUT_LIN - Arduino Nano + LINTTL3"));
+    Serial.println(F("Door/window body-control slave simulator (LIN master role)"));
     Serial.println(F("Dedicating hardware UART to the LIN bus @ 19200 now."));
     Serial.println(F("No further USB serial output - see onboard LED for status."));
     Serial.flush();
@@ -310,37 +316,40 @@ void setup()
     Serial.end();
     Serial.begin(LIN_BAUD);   // from here on, Serial == the LIN bus
 
-    tCounter = tQuery = millis();
+    tStatus = tCmd = millis();
 }
 
 void loop()
 {
+    updateWindowMotion();
+
     uint32_t now = millis();
 
-    if (now - tCounter >= 1000)   // 1 Hz: self-contained counter frame
+    if (now - tStatus >= 1000)   // 1 Hz: publish current door/window status
     {
-        tCounter = now;
-        uint8_t data[1] = { counterByte++ };
-        linSendFrame(ID_COUNTER, data, sizeof(data));
+        tStatus = now;
+        uint8_t data[STATUS_LEN];
+        buildStatusFrame(data);
+        linSendFrame(ID_STATUS, data, STATUS_LEN);
         linDrainEcho();
         blinkPattern(1, 30, 0);
     }
 
-    if (now - tQuery >= 2000)   // 0.5 Hz: query the STM32 (SLAVE-mode test)
+    if (now - tCmd >= 2000)   // 0.5 Hz: poll the STM32 for a new command (via LIN RESP)
     {
-        tQuery = now;
-        linSendHeader(ID_QUERY_SLAVE);
+        tCmd = now;
+        linSendHeader(ID_CMD);
 
         uint8_t data[8], len;
-        switch (linReadResponse(ID_QUERY_SLAVE, data, &len, QUERY_TIMEOUT_MS))
+        switch (linReadResponse(ID_CMD, data, &len, QUERY_TIMEOUT_MS))
         {
-        case LIN_READ_OK:           blinkPattern(2, 80, 80); break;   // valid response
-        case LIN_READ_BAD_CHECKSUM: blinkPattern(4, 40, 40); break;   // checksum mismatch
-        case LIN_READ_TIMEOUT:      blinkPattern(1, 400, 0); break;   // no response seen
+        case LIN_READ_OK:
+            if (len >= CMD_RESP_LEN) { applyCmdResponse(data); blinkPattern(2, 80, 80); }
+            break;
+        case LIN_READ_BAD_CHECKSUM: blinkPattern(4, 40, 40); break;
+        case LIN_READ_TIMEOUT:      blinkPattern(1, 400, 0); break;
         }
 
         linDrainEcho();
     }
-
-    linPollAutoResponder();   // passive listen for STM32-driven 0x30 headers
 }

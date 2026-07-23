@@ -1,32 +1,40 @@
 /*
- * LINSim_DUT_LIN.ldf — demo LDF for LINSim_DUT_LIN.ino, to verify the
- * Arduino DUT's LIN *master* behavior (frames 0x10 and 0x20) with a LIN
- * bus analyzer / "bus master" tool.
+ * LINSim_DUT.ldf — demo LDF for LINSim_DUT_LIN.ino, a simulated 4-door /
+ * 4-window body-control slave module.
  *
- * Covers only the two IDs the Arduino drives as master:
- *   0x10  Frame_Counter    — self-contained, Arduino publishes, 1 Hz
- *   0x20  Frame_QuerySlave — Arduino sends the header, STM32_DUT (in
- *                            `LIN MODE SLAVE` + `LIN RESP 0x20 ...`)
- *                            publishes the response, 0.5 Hz
+ * Roles: Arduino_DUT is the LIN *master* (drives both frame headers below
+ * on a fixed schedule, same as the original harness). STM32_DUT stays in
+ * its default LIN_MODE_SLAVE the whole time — no `LIN MODE MASTER` needed
+ * for this test.
  *
- * 0x30 (Frame_AutoRespond) is deliberately NOT in the schedule table here.
- * In that test the STM32 drives the header instead (`LIN MODE MASTER` +
- * `LIN SEND 0x30`/`LIN ON`) and the Arduino only auto-answers passively —
- * i.e. the bus's master role has swapped for that one ID. Its frame is
- * still declared below so an analyzer can decode it if seen on the bus,
- * but it's excluded from Arduino_DUT's own schedule table.
+ *   0x10  Frame_DoorWindowStatus — self-contained, Arduino_DUT publishes
+ *         its own simulated status (door lock bitmask, live window
+ *         positions, window-moving bitmask), ~1 Hz. `LISTEN ON` on the
+ *         STM32 is enough to see it decoded — no STM32 action needed.
+ *   0x20  Frame_DoorWindowCmd — header-only from Arduino_DUT, ~0.5 Hz;
+ *         STM32_DUT answers via a registered slave response:
+ *           STM32> LIN RESP 0x20 <lockBits> <winFL> <winFR> <winRL> <winRR>
+ *         This is how you *set* the commanded door-lock/window-target
+ *         signals from the STM32 CLI. Re-issue `LIN RESP 0x20 ...` any time
+ *         to change the command; Arduino_DUT picks it up on its next poll
+ *         and animates the windows toward the new targets over a few
+ *         seconds (doors lock/unlock instantly — no motor to animate).
  *
- * ⚠ If your tool can actively master the bus (not just monitor/decode),
- * keep it in passive/monitor mode while testing 0x10/0x20 — LIN is
- * strictly single-master, and having both the Arduino and the tool drive
- * headers at once is a protocol violation, not just noise (see
- * CLAUDE.md's LIN architecture notes).
+ * Byte layout (see LINSim_DUT_LIN.ino's applyCmdResponse()/buildStatusFrame()):
+ *   Frame_DoorWindowCmd    [0]     DoorLockCmd bitmask: bit0=FL bit1=FR bit2=RL bit3=RR (1=lock, 0=unlock)
+ *                          [1..4]  WinTargetFL/FR/RL/RR — commanded position, 0-100 (0=fully open, 100=fully closed)
+ *   Frame_DoorWindowStatus [0]     DoorLockStatus bitmask — same bit layout, mirrors the last applied command
+ *                          [1..4]  WinPosFL/FR/RL/RR — live position, 0-100 (animates toward the commanded target)
+ *                          [5]     WinMovingStatus bitmask: bit_i set while window i's position != its target
  *
- * Response length for 0x20 (3 bytes below) is arbitrary — the wire
- * protocol carries no length field, so this must simply match whatever
- * `LIN RESP 0x20 <bytes>` is currently configured on the STM32 (README
- * example: `LIN RESP 0x20 AA BB CC`). Adjust Frame_QuerySlave's byte
- * count/signals if you configure a different length.
+ * No factor/offset/unit metadata below (this project's simplified LDF
+ * decode path — see Tools/webui.html's parseLDF()/lookupMsg() — only tracks
+ * whole-byte signals; raw values are already the 0-100 percentage/bitmask,
+ * no scaling needed).
+ *
+ * 0x30 is free/unused by this test (previously Frame_AutoRespond, which
+ * exercised the STM32 in LIN MODE MASTER — not part of this door/window
+ * scenario, since STM32 stays in SLAVE mode throughout).
  */
 
 LIN_description_file;
@@ -40,26 +48,35 @@ Nodes {
 }
 
 Signals {
-    CounterByte0    : 8, 0,    Arduino_DUT, STM32_DUT;
-    QueryRespByte0  : 8, 0,    STM32_DUT, Arduino_DUT;
-    QueryRespByte1  : 8, 0,    STM32_DUT, Arduino_DUT;
-    QueryRespByte2  : 8, 0,    STM32_DUT, Arduino_DUT;
-    AutoRespCounter : 8, 0,    Arduino_DUT, STM32_DUT;
-    AutoRespFixed   : 8, 0xA5, Arduino_DUT, STM32_DUT;
+    DoorLockCmd     : 8, 0, STM32_DUT, Arduino_DUT;
+    WinTargetFL     : 8, 0, STM32_DUT, Arduino_DUT;
+    WinTargetFR     : 8, 0, STM32_DUT, Arduino_DUT;
+    WinTargetRL     : 8, 0, STM32_DUT, Arduino_DUT;
+    WinTargetRR     : 8, 0, STM32_DUT, Arduino_DUT;
+
+    DoorLockStatus  : 8, 0, Arduino_DUT, STM32_DUT;
+    WinPosFL        : 8, 0, Arduino_DUT, STM32_DUT;
+    WinPosFR        : 8, 0, Arduino_DUT, STM32_DUT;
+    WinPosRL        : 8, 0, Arduino_DUT, STM32_DUT;
+    WinPosRR        : 8, 0, Arduino_DUT, STM32_DUT;
+    WinMovingStatus : 8, 0, Arduino_DUT, STM32_DUT;
 }
 
 Frames {
-    Frame_Counter: 0x10, Arduino_DUT, 1 {
-        CounterByte0, 0;
+    Frame_DoorWindowStatus: 0x10, Arduino_DUT, 6 {
+        DoorLockStatus,  0;
+        WinPosFL,        8;
+        WinPosFR,        16;
+        WinPosRL,        24;
+        WinPosRR,        32;
+        WinMovingStatus, 40;
     }
-    Frame_QuerySlave: 0x20, STM32_DUT, 3 {
-        QueryRespByte0, 0;
-        QueryRespByte1, 8;
-        QueryRespByte2, 16;
-    }
-    Frame_AutoRespond: 0x30, Arduino_DUT, 2 {
-        AutoRespCounter, 0;
-        AutoRespFixed, 8;
+    Frame_DoorWindowCmd: 0x20, STM32_DUT, 5 {
+        DoorLockCmd, 0;
+        WinTargetFL, 8;
+        WinTargetFR, 16;
+        WinTargetRL, 24;
+        WinTargetRR, 32;
     }
 }
 
@@ -72,22 +89,22 @@ Node_attributes {
         P2_min = 50 ms;
         ST_min = 0 ms;
         configurable_frames {
-            Frame_QuerySlave;
+            Frame_DoorWindowCmd;
         }
     }
 }
 
 /*
- * Approximates the sketch's actual loop() timing (Frame_Counter every
- * 1000 ms, Frame_QuerySlave every 2000 ms) via a repeating 2000 ms cycle —
- * exact phase doesn't matter here since real timing comes from the
- * Arduino's own millis()-based scheduler in LINSim_DUT_LIN.ino, not from
- * a tool driving this table. Use this purely for frame/signal decode.
+ * Approximates the sketch's actual loop() timing (Frame_DoorWindowStatus
+ * every 1000 ms, Frame_DoorWindowCmd every 2000 ms) via a repeating 2000 ms
+ * cycle — exact phase doesn't matter here since real timing comes from the
+ * Arduino's own millis()-based scheduler in LINSim_DUT_LIN.ino, not from a
+ * tool driving this table. Use this purely for frame/signal decode.
  */
 Schedule_tables {
     Master_Schedule {
-        Frame_Counter    delay 500 ms;
-        Frame_QuerySlave delay 500 ms;
-        Frame_Counter    delay 1000 ms;
+        Frame_DoorWindowStatus delay 500 ms;
+        Frame_DoorWindowCmd    delay 500 ms;
+        Frame_DoorWindowStatus delay 1000 ms;
     }
 }
